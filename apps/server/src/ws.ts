@@ -3,7 +3,11 @@ import {
   type AuthAccessStreamEvent,
   AuthSessionId,
   CommandId,
+  DEFAULT_MODEL_BY_PROVIDER,
+  DEFAULT_PROVIDER_INTERACTION_MODE,
+  DEFAULT_RUNTIME_MODE,
   EventId,
+  ExternalSessionsBindResumeError,
   type OrchestrationCommand,
   type GitActionProgressEvent,
   type GitManagerServiceError,
@@ -42,7 +46,9 @@ import {
   observeRpcStream,
   observeRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
+import { ExternalSessionDirectory } from "./provider/Services/ExternalSessionDirectory.ts";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
+import { ProviderSessionDirectory } from "./provider/Services/ProviderSessionDirectory.ts";
 import { ServerLifecycleEvents } from "./serverLifecycleEvents.ts";
 import { ServerRuntimeStartup } from "./serverRuntimeStartup.ts";
 import { redactServerSettingsForClient, ServerSettingsService } from "./serverSettings.ts";
@@ -141,6 +147,8 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
       const gitStatusBroadcaster = yield* GitStatusBroadcaster;
       const terminalManager = yield* TerminalManager;
       const providerRegistry = yield* ProviderRegistry;
+      const externalSessionDirectory = yield* ExternalSessionDirectory;
+      const providerSessionDirectory = yield* ProviderSessionDirectory;
       const config = yield* ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents;
       const serverSettings = yield* ServerSettingsService;
@@ -830,6 +838,75 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               ),
             ),
             { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.externalSessionsList]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.externalSessionsList,
+            externalSessionDirectory.listForCwd(input.cwd, {
+              ...(input.scope ? { scope: input.scope } : {}),
+              ...(input.query ? { query: input.query } : {}),
+              ...(input.limitPerProvider ? { limitPerProvider: input.limitPerProvider } : {}),
+            }),
+            { "rpc.aggregate": "externalSessions" },
+          ),
+        [WS_METHODS.externalSessionsBindResume]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.externalSessionsBindResume,
+            Effect.gen(function* () {
+              // Map our public provider literal onto t3code's internal ProviderKind.
+              const providerKind = input.provider === "claude" ? "claudeAgent" : "codex";
+              // Build the resumeCursor shape each adapter expects.
+              // Claude reads `resume` (the SDK session id). Codex reads `threadId` (its session id).
+              const resumeCursor =
+                input.provider === "claude"
+                  ? { resume: input.sessionId }
+                  : { threadId: input.sessionId };
+
+              const newThreadId = ThreadId.make(crypto.randomUUID());
+              const providerLabel = input.provider === "claude" ? "Claude" : "Codex";
+              const title = input.title ?? `Resumed ${providerLabel} session`;
+
+              // Pre-seed the binding before dispatching thread.create so the adapter
+              // sees the resumeCursor on the first turn.
+              yield* providerSessionDirectory.upsert({
+                threadId: newThreadId,
+                provider: providerKind,
+                adapterKey: providerKind,
+                runtimeMode: "full-access",
+                status: "stopped",
+                resumeCursor,
+              });
+
+              // Dispatch thread.create so the thread becomes a real (sidebar-visible)
+              // thread immediately, and the web client can navigate to its server route.
+              yield* orchestrationEngine.dispatch({
+                type: "thread.create",
+                commandId: serverCommandId("external-resume-thread-create"),
+                threadId: newThreadId,
+                projectId: input.projectId,
+                title,
+                modelSelection: {
+                  provider: providerKind,
+                  model: DEFAULT_MODEL_BY_PROVIDER[providerKind],
+                },
+                runtimeMode: DEFAULT_RUNTIME_MODE,
+                interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+                branch: null,
+                worktreePath: null,
+                createdAt: new Date().toISOString(),
+              });
+
+              return { threadId: newThreadId };
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ExternalSessionsBindResumeError({
+                    message: "Failed to bind external session as resume cursor.",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "externalSessions" },
           ),
         [WS_METHODS.subscribeGitStatus]: (input) =>
           observeRpcStream(

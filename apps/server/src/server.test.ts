@@ -90,6 +90,8 @@ import {
   type BrowserTraceCollectorShape,
 } from "./observability/Services/BrowserTraceCollector.ts";
 import { ProjectFaviconResolverLive } from "./project/Layers/ProjectFaviconResolver.ts";
+import { ExternalSessionDirectoryLive } from "./provider/Layers/ExternalSessionDirectory.ts";
+import { ProviderSessionDirectory } from "./provider/Services/ProviderSessionDirectory.ts";
 import {
   ProjectSetupScriptRunner,
   type ProjectSetupScriptRunnerShape,
@@ -543,6 +545,16 @@ const buildAppUnderTest = (options?: {
       ),
       Layer.provideMerge(authTestLayer),
       Layer.provide(workspaceAndProjectServicesLayer),
+      Layer.provide(ExternalSessionDirectoryLive),
+      Layer.provide(
+        Layer.mock(ProviderSessionDirectory)({
+          upsert: () => Effect.void,
+          getProvider: () => Effect.succeed("claudeAgent" as const),
+          getBinding: () => Effect.succeed(Option.none()),
+          listThreadIds: () => Effect.succeed([]),
+          listBindings: () => Effect.succeed([]),
+        }),
+      ),
       Layer.provideMerge(FetchHttpClient.layer),
       Layer.provide(layerConfig),
     );

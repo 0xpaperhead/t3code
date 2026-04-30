@@ -23,6 +23,10 @@ export function createEnvironmentApi(rpcClient: WsRpcClient): EnvironmentApi {
     filesystem: {
       browse: rpcClient.filesystem.browse,
     },
+    externalSessions: {
+      list: rpcClient.externalSessions.list,
+      bindResume: rpcClient.externalSessions.bindResume,
+    },
     git: {
       pull: rpcClient.git.pull,
       refreshStatus: rpcClient.git.refreshStatus,

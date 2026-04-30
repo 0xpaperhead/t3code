@@ -20,6 +20,12 @@ import type {
 } from "./git.ts";
 import type { FilesystemBrowseInput, FilesystemBrowseResult } from "./filesystem.ts";
 import type {
+  ExternalSessionsListInput,
+  ExternalSessionsListResult,
+  ExternalSessionsBindResumeInput,
+  ExternalSessionsBindResumeResult,
+} from "./externalSession.ts";
+import type {
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
   ProjectWriteFileInput,
@@ -255,6 +261,12 @@ export interface EnvironmentApi {
   };
   filesystem: {
     browse: (input: FilesystemBrowseInput) => Promise<FilesystemBrowseResult>;
+  };
+  externalSessions: {
+    list: (input: ExternalSessionsListInput) => Promise<ExternalSessionsListResult>;
+    bindResume: (
+      input: ExternalSessionsBindResumeInput,
+    ) => Promise<ExternalSessionsBindResumeResult>;
   };
   git: {
     listBranches: (input: GitListBranchesInput) => Promise<GitListBranchesResult>;

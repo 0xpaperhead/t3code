@@ -10,6 +10,14 @@ import {
   FilesystemBrowseError,
 } from "./filesystem.ts";
 import {
+  ExternalSessionsListInput,
+  ExternalSessionsListResult,
+  ExternalSessionScanError,
+  ExternalSessionsBindResumeInput,
+  ExternalSessionsBindResumeResult,
+  ExternalSessionsBindResumeError,
+} from "./externalSession.ts";
+import {
   GitActionProgressEvent,
   GitCheckoutInput,
   GitCheckoutResult,
@@ -91,6 +99,10 @@ export const WS_METHODS = {
 
   // Filesystem methods
   filesystemBrowse: "filesystem.browse",
+
+  // External CLI session methods (terminal-originated Claude/Codex sessions)
+  externalSessionsList: "externalSessions.list",
+  externalSessionsBindResume: "externalSessions.bindResume",
 
   // Git methods
   gitPull: "git.pull",
@@ -186,6 +198,18 @@ export const WsFilesystemBrowseRpc = Rpc.make(WS_METHODS.filesystemBrowse, {
   payload: FilesystemBrowseInput,
   success: FilesystemBrowseResult,
   error: FilesystemBrowseError,
+});
+
+export const WsExternalSessionsListRpc = Rpc.make(WS_METHODS.externalSessionsList, {
+  payload: ExternalSessionsListInput,
+  success: ExternalSessionsListResult,
+  error: ExternalSessionScanError,
+});
+
+export const WsExternalSessionsBindResumeRpc = Rpc.make(WS_METHODS.externalSessionsBindResume, {
+  payload: ExternalSessionsBindResumeInput,
+  success: ExternalSessionsBindResumeResult,
+  error: ExternalSessionsBindResumeError,
 });
 
 export const WsSubscribeGitStatusRpc = Rpc.make(WS_METHODS.subscribeGitStatus, {
@@ -374,6 +398,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsWriteFileRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,
+  WsExternalSessionsListRpc,
+  WsExternalSessionsBindResumeRpc,
   WsSubscribeGitStatusRpc,
   WsGitPullRpc,
   WsGitRefreshStatusRpc,

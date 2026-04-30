@@ -206,6 +206,14 @@ function createMockEnvironmentApi(input: {
     filesystem: {
       browse: input.browse,
     },
+    externalSessions: {
+      list: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["externalSessions"]["list"],
+      bindResume: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["externalSessions"]["bindResume"],
+    },
     git: {} as EnvironmentApi["git"],
     orchestration: {
       dispatchCommand: input.dispatchCommand,
