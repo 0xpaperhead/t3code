@@ -74,6 +74,8 @@ export interface WsRpcClient {
   readonly externalSessions: {
     readonly list: RpcUnaryMethod<typeof WS_METHODS.externalSessionsList>;
     readonly bindResume: RpcUnaryMethod<typeof WS_METHODS.externalSessionsBindResume>;
+    readonly getMessages: RpcUnaryMethod<typeof WS_METHODS.externalSessionsGetMessages>;
+    readonly getResumeMeta: RpcUnaryMethod<typeof WS_METHODS.externalSessionsGetResumeMeta>;
   };
   readonly shell: {
     readonly openInEditor: (input: {
@@ -166,6 +168,10 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
         transport.request((client) => client[WS_METHODS.externalSessionsList](input)),
       bindResume: (input) =>
         transport.request((client) => client[WS_METHODS.externalSessionsBindResume](input)),
+      getMessages: (input) =>
+        transport.request((client) => client[WS_METHODS.externalSessionsGetMessages](input)),
+      getResumeMeta: (input) =>
+        transport.request((client) => client[WS_METHODS.externalSessionsGetResumeMeta](input)),
     },
     shell: {
       openInEditor: (input) =>

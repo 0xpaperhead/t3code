@@ -46,6 +46,7 @@ export const ExternalSessionsBindResumeInput = Schema.Struct({
   projectId: ProjectId,
   provider: ExternalSessionProvider,
   sessionId: TrimmedNonEmptyString,
+  cwd: TrimmedNonEmptyString,
   title: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(200))),
 });
 export type ExternalSessionsBindResumeInput = typeof ExternalSessionsBindResumeInput.Type;
@@ -57,6 +58,70 @@ export type ExternalSessionsBindResumeResult = typeof ExternalSessionsBindResume
 
 export class ExternalSessionsBindResumeError extends Schema.TaggedErrorClass<ExternalSessionsBindResumeError>()(
   "ExternalSessionsBindResumeError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {}
+
+// Imported timeline entries returned for resumed CLI sessions.
+export const ImportedExternalEntry = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("user"),
+    id: TrimmedNonEmptyString,
+    createdAt: TrimmedNonEmptyString,
+    text: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("assistant"),
+    id: TrimmedNonEmptyString,
+    createdAt: TrimmedNonEmptyString,
+    text: Schema.String,
+    turnId: Schema.optional(TrimmedNonEmptyString),
+  }),
+]);
+export type ImportedExternalEntry = typeof ImportedExternalEntry.Type;
+
+export const ExternalSessionsGetMessagesInput = Schema.Struct({
+  provider: ExternalSessionProvider,
+  sessionId: TrimmedNonEmptyString,
+  cwd: TrimmedNonEmptyString,
+});
+export type ExternalSessionsGetMessagesInput = typeof ExternalSessionsGetMessagesInput.Type;
+
+export const ExternalSessionsGetMessagesResult = Schema.Struct({
+  entries: Schema.Array(ImportedExternalEntry),
+});
+export type ExternalSessionsGetMessagesResult = typeof ExternalSessionsGetMessagesResult.Type;
+
+export class ExternalSessionsGetMessagesError extends Schema.TaggedErrorClass<ExternalSessionsGetMessagesError>()(
+  "ExternalSessionsGetMessagesError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {}
+
+export const ExternalResumeMeta = Schema.Struct({
+  provider: ExternalSessionProvider,
+  sessionId: TrimmedNonEmptyString,
+  cwd: TrimmedNonEmptyString,
+  importedAt: TrimmedNonEmptyString,
+});
+export type ExternalResumeMeta = typeof ExternalResumeMeta.Type;
+
+export const ExternalSessionsGetResumeMetaInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type ExternalSessionsGetResumeMetaInput = typeof ExternalSessionsGetResumeMetaInput.Type;
+
+export const ExternalSessionsGetResumeMetaResult = Schema.Struct({
+  meta: Schema.NullOr(ExternalResumeMeta),
+});
+export type ExternalSessionsGetResumeMetaResult = typeof ExternalSessionsGetResumeMetaResult.Type;
+
+export class ExternalSessionsGetResumeMetaError extends Schema.TaggedErrorClass<ExternalSessionsGetResumeMetaError>()(
+  "ExternalSessionsGetResumeMetaError",
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect),

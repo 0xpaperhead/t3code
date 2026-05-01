@@ -26,6 +26,8 @@ export function createEnvironmentApi(rpcClient: WsRpcClient): EnvironmentApi {
     externalSessions: {
       list: rpcClient.externalSessions.list,
       bindResume: rpcClient.externalSessions.bindResume,
+      getMessages: rpcClient.externalSessions.getMessages,
+      getResumeMeta: rpcClient.externalSessions.getResumeMeta,
     },
     git: {
       pull: rpcClient.git.pull,

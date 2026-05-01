@@ -16,6 +16,12 @@ import {
   ExternalSessionsBindResumeInput,
   ExternalSessionsBindResumeResult,
   ExternalSessionsBindResumeError,
+  ExternalSessionsGetMessagesInput,
+  ExternalSessionsGetMessagesResult,
+  ExternalSessionsGetMessagesError,
+  ExternalSessionsGetResumeMetaInput,
+  ExternalSessionsGetResumeMetaResult,
+  ExternalSessionsGetResumeMetaError,
 } from "./externalSession.ts";
 import {
   GitActionProgressEvent,
@@ -103,6 +109,8 @@ export const WS_METHODS = {
   // External CLI session methods (terminal-originated Claude/Codex sessions)
   externalSessionsList: "externalSessions.list",
   externalSessionsBindResume: "externalSessions.bindResume",
+  externalSessionsGetMessages: "externalSessions.getMessages",
+  externalSessionsGetResumeMeta: "externalSessions.getResumeMeta",
 
   // Git methods
   gitPull: "git.pull",
@@ -211,6 +219,21 @@ export const WsExternalSessionsBindResumeRpc = Rpc.make(WS_METHODS.externalSessi
   success: ExternalSessionsBindResumeResult,
   error: ExternalSessionsBindResumeError,
 });
+
+export const WsExternalSessionsGetMessagesRpc = Rpc.make(WS_METHODS.externalSessionsGetMessages, {
+  payload: ExternalSessionsGetMessagesInput,
+  success: ExternalSessionsGetMessagesResult,
+  error: ExternalSessionsGetMessagesError,
+});
+
+export const WsExternalSessionsGetResumeMetaRpc = Rpc.make(
+  WS_METHODS.externalSessionsGetResumeMeta,
+  {
+    payload: ExternalSessionsGetResumeMetaInput,
+    success: ExternalSessionsGetResumeMetaResult,
+    error: ExternalSessionsGetResumeMetaError,
+  },
+);
 
 export const WsSubscribeGitStatusRpc = Rpc.make(WS_METHODS.subscribeGitStatus, {
   payload: GitStatusInput,
@@ -400,6 +423,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsFilesystemBrowseRpc,
   WsExternalSessionsListRpc,
   WsExternalSessionsBindResumeRpc,
+  WsExternalSessionsGetMessagesRpc,
+  WsExternalSessionsGetResumeMetaRpc,
   WsSubscribeGitStatusRpc,
   WsGitPullRpc,
   WsGitRefreshStatusRpc,

@@ -80,6 +80,7 @@ export function ExternalSessionHistory({
       projectId,
       provider: session.provider,
       sessionId: session.sessionId,
+      cwd: session.cwd,
       ...(session.title ? { title: session.title } : {}),
     })
       .then(() => {

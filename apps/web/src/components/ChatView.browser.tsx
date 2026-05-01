@@ -213,6 +213,12 @@ function createMockEnvironmentApi(input: {
       bindResume: (() => {
         throw new Error("Not implemented in browser test.");
       }) as EnvironmentApi["externalSessions"]["bindResume"],
+      getMessages: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["externalSessions"]["getMessages"],
+      getResumeMeta: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["externalSessions"]["getResumeMeta"],
     },
     git: {} as EnvironmentApi["git"],
     orchestration: {

@@ -14,6 +14,7 @@ interface ResumeExternalSessionInput {
   readonly projectId: ProjectId;
   readonly provider: ExternalSessionProvider;
   readonly sessionId: string;
+  readonly cwd: string;
   readonly title?: string;
 }
 
@@ -32,6 +33,7 @@ export function useHandleResumeExternalSession() {
         projectId: input.projectId,
         provider: input.provider,
         sessionId: input.sessionId,
+        cwd: input.cwd,
         ...(input.title ? { title: input.title } : {}),
       });
 

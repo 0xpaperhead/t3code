@@ -24,6 +24,10 @@ import type {
   ExternalSessionsListResult,
   ExternalSessionsBindResumeInput,
   ExternalSessionsBindResumeResult,
+  ExternalSessionsGetMessagesInput,
+  ExternalSessionsGetMessagesResult,
+  ExternalSessionsGetResumeMetaInput,
+  ExternalSessionsGetResumeMetaResult,
 } from "./externalSession.ts";
 import type {
   ProjectSearchEntriesInput,
@@ -267,6 +271,12 @@ export interface EnvironmentApi {
     bindResume: (
       input: ExternalSessionsBindResumeInput,
     ) => Promise<ExternalSessionsBindResumeResult>;
+    getMessages: (
+      input: ExternalSessionsGetMessagesInput,
+    ) => Promise<ExternalSessionsGetMessagesResult>;
+    getResumeMeta: (
+      input: ExternalSessionsGetResumeMetaInput,
+    ) => Promise<ExternalSessionsGetResumeMetaResult>;
   };
   git: {
     listBranches: (input: GitListBranchesInput) => Promise<GitListBranchesResult>;

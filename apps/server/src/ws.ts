@@ -8,6 +8,8 @@ import {
   DEFAULT_RUNTIME_MODE,
   EventId,
   ExternalSessionsBindResumeError,
+  ExternalSessionsGetMessagesError,
+  ExternalSessionsGetResumeMetaError,
   type OrchestrationCommand,
   type GitActionProgressEvent,
   type GitManagerServiceError,
@@ -849,6 +851,63 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             }),
             { "rpc.aggregate": "externalSessions" },
           ),
+        [WS_METHODS.externalSessionsGetMessages]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.externalSessionsGetMessages,
+            externalSessionDirectory
+              .getMessages({
+                provider: input.provider,
+                sessionId: input.sessionId,
+                cwd: input.cwd,
+              })
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ExternalSessionsGetMessagesError({
+                      message: "Failed to load imported messages.",
+                      cause,
+                    }),
+                ),
+              ),
+            { "rpc.aggregate": "externalSessions" },
+          ),
+        [WS_METHODS.externalSessionsGetResumeMeta]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.externalSessionsGetResumeMeta,
+            Effect.gen(function* () {
+              const bindingOpt = yield* providerSessionDirectory.getBinding(input.threadId);
+              if (bindingOpt._tag === "None") return { meta: null };
+              const payload = bindingOpt.value.runtimePayload;
+              if (!payload || typeof payload !== "object") return { meta: null };
+              const externalResume = (payload as Record<string, unknown>)["externalResume"];
+              if (!externalResume || typeof externalResume !== "object") return { meta: null };
+              const e = externalResume as Record<string, unknown>;
+              const provider = e["provider"];
+              const sessionId = e["sessionId"];
+              const cwd = e["cwd"];
+              const importedAt = e["importedAt"];
+              if (
+                (provider !== "claude" && provider !== "codex") ||
+                typeof sessionId !== "string" ||
+                typeof cwd !== "string" ||
+                typeof importedAt !== "string"
+              ) {
+                return { meta: null };
+              }
+              return {
+                meta: { provider, sessionId, cwd, importedAt } as const,
+              };
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ExternalSessionsGetResumeMetaError({
+                    message: "Failed to load external resume metadata.",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "externalSessions" },
+          ),
         [WS_METHODS.externalSessionsBindResume]: (input) =>
           observeRpcEffect(
             WS_METHODS.externalSessionsBindResume,
@@ -867,7 +926,9 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               const title = input.title ?? `Resumed ${providerLabel} session`;
 
               // Pre-seed the binding before dispatching thread.create so the adapter
-              // sees the resumeCursor on the first turn.
+              // sees the resumeCursor on the first turn. Stamp runtimePayload with the
+              // external-resume marker so the web client can fetch + render imported
+              // history later.
               yield* providerSessionDirectory.upsert({
                 threadId: newThreadId,
                 provider: providerKind,
@@ -875,6 +936,14 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                 runtimeMode: "full-access",
                 status: "stopped",
                 resumeCursor,
+                runtimePayload: {
+                  externalResume: {
+                    provider: input.provider,
+                    sessionId: input.sessionId,
+                    cwd: input.cwd,
+                    importedAt: new Date().toISOString(),
+                  },
+                },
               });
 
               // Dispatch thread.create so the thread becomes a real (sidebar-visible)

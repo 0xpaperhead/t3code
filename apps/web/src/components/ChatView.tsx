@@ -96,6 +96,7 @@ import {
 } from "../types";
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
+import { useExternalSessionImports } from "../hooks/useExternalSessionImports";
 import { useCommandPaletteStore } from "../commandPaletteStore";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -1356,10 +1357,21 @@ export default function ChatView(props: ChatViewProps) {
     }
     return [...serverMessagesWithPreviewHandoff, ...pendingMessages];
   }, [serverMessages, attachmentPreviewHandoffByMessageId, optimisticUserMessages]);
-  const timelineEntries = useMemo(
+  const liveTimelineEntries = useMemo(
     () =>
       deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
     [activeThread?.proposedPlans, timelineMessages, workLogEntries],
+  );
+  const externalImports = useExternalSessionImports(
+    activeThread?.environmentId ?? null,
+    activeThread?.id ?? null,
+  );
+  const timelineEntries = useMemo(
+    () =>
+      externalImports.entries.length > 0
+        ? [...externalImports.entries, ...liveTimelineEntries]
+        : liveTimelineEntries,
+    [externalImports.entries, liveTimelineEntries],
   );
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);

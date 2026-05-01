@@ -4,6 +4,7 @@ import {
   ExternalSessionScanError,
   type ExternalSessionProvider,
   type ExternalSessionSummary,
+  type ImportedExternalEntry,
 } from "@t3tools/contracts";
 import { Effect, FileSystem, Layer, Path } from "effect";
 
@@ -11,6 +12,7 @@ import {
   ExternalSessionDirectory,
   type ExternalSessionDirectoryShape,
   type ExternalSessionListResult,
+  type ExternalSessionMessagesResult,
 } from "../Services/ExternalSessionDirectory.ts";
 
 const DEFAULT_LIMIT_PER_PROVIDER = 200;
@@ -361,6 +363,158 @@ function compareNewestFirst(a: RawSummary, b: RawSummary): number {
   return b.modifiedAtMs - a.modifiedAtMs;
 }
 
+function extractClaudeAssistantText(parsed: unknown): string | null {
+  if (!parsed || typeof parsed !== "object") return null;
+  const obj = parsed as Record<string, unknown>;
+  if (obj["type"] !== "assistant") return null;
+  const message = obj["message"];
+  if (!message || typeof message !== "object") return null;
+  const messageObj = message as Record<string, unknown>;
+  if (messageObj["role"] !== "assistant") return null;
+  const content = messageObj["content"];
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const texts: string[] = [];
+    for (const block of content) {
+      if (block && typeof block === "object") {
+        const blockObj = block as Record<string, unknown>;
+        if (blockObj["type"] === "text" && typeof blockObj["text"] === "string") {
+          texts.push(blockObj["text"] as string);
+        }
+      }
+    }
+    if (texts.length > 0) return texts.join("\n\n");
+  }
+  return null;
+}
+
+function extractClaudeCommonFields(parsed: unknown): {
+  uuid?: string;
+  timestamp?: string;
+} {
+  if (!parsed || typeof parsed !== "object") return {};
+  const obj = parsed as Record<string, unknown>;
+  const uuid = typeof obj["uuid"] === "string" ? (obj["uuid"] as string) : undefined;
+  const timestamp =
+    typeof obj["timestamp"] === "string" ? (obj["timestamp"] as string) : undefined;
+  return { ...(uuid ? { uuid } : {}), ...(timestamp ? { timestamp } : {}) };
+}
+
+function extractCodexAssistantText(parsed: unknown): string | null {
+  if (!parsed || typeof parsed !== "object") return null;
+  const obj = parsed as Record<string, unknown>;
+  if (obj["type"] !== "response_item") return null;
+  const payload = obj["payload"];
+  if (!payload || typeof payload !== "object") return null;
+  const payloadObj = payload as Record<string, unknown>;
+  if (payloadObj["role"] !== "assistant") return null;
+  const content = payloadObj["content"];
+  if (Array.isArray(content)) {
+    const texts: string[] = [];
+    for (const block of content) {
+      if (block && typeof block === "object") {
+        const blockObj = block as Record<string, unknown>;
+        const text = blockObj["text"];
+        if (typeof text === "string" && text.length > 0) texts.push(text);
+      }
+    }
+    if (texts.length > 0) return texts.join("\n\n");
+  }
+  return null;
+}
+
+function parseClaudeImports(
+  contents: string,
+  sessionId: string,
+): ReadonlyArray<ImportedExternalEntry> {
+  const out: Array<ImportedExternalEntry> = [];
+  let userIndex = 0;
+  let assistantIndex = 0;
+  for (const rawLine of contents.split("\n")) {
+    if (!rawLine) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawLine);
+    } catch {
+      continue;
+    }
+    const userText = extractClaudeUserText(parsed);
+    if (userText !== null) {
+      const cleaned = cleanUserPromptText(userText);
+      // Drop the harness-injected preludes; keep real user prompts only.
+      if (cleaned !== null && !looksLikePrelude(userText)) {
+        const fields = extractClaudeCommonFields(parsed);
+        out.push({
+          kind: "user",
+          id: `import:user:${sessionId}:${fields.uuid ?? userIndex}`,
+          createdAt: fields.timestamp ?? new Date(0).toISOString(),
+          text: cleaned,
+        });
+      }
+      userIndex += 1;
+      continue;
+    }
+    const assistantText = extractClaudeAssistantText(parsed);
+    if (assistantText !== null && assistantText.trim().length > 0) {
+      const fields = extractClaudeCommonFields(parsed);
+      out.push({
+        kind: "assistant",
+        id: `import:assistant:${sessionId}:${fields.uuid ?? assistantIndex}`,
+        createdAt: fields.timestamp ?? new Date(0).toISOString(),
+        text: assistantText,
+        ...(fields.uuid ? { turnId: `import-turn:${fields.uuid}` } : {}),
+      });
+      assistantIndex += 1;
+    }
+  }
+  return out;
+}
+
+function parseCodexImports(
+  contents: string,
+  sessionId: string,
+): ReadonlyArray<ImportedExternalEntry> {
+  const out: Array<ImportedExternalEntry> = [];
+  let userIndex = 0;
+  let assistantIndex = 0;
+  for (const rawLine of contents.split("\n")) {
+    if (!rawLine) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawLine);
+    } catch {
+      continue;
+    }
+    const obj = parsed as Record<string, unknown>;
+    const timestamp = typeof obj["timestamp"] === "string" ? (obj["timestamp"] as string) : null;
+    const userText = extractCodexUserText(parsed);
+    if (userText !== null) {
+      const cleaned = cleanUserPromptText(userText);
+      if (cleaned !== null && !looksLikePrelude(userText)) {
+        out.push({
+          kind: "user",
+          id: `import:user:${sessionId}:${userIndex}`,
+          createdAt: timestamp ?? new Date(0).toISOString(),
+          text: cleaned,
+        });
+      }
+      userIndex += 1;
+      continue;
+    }
+    const assistantText = extractCodexAssistantText(parsed);
+    if (assistantText !== null && assistantText.trim().length > 0) {
+      out.push({
+        kind: "assistant",
+        id: `import:assistant:${sessionId}:${assistantIndex}`,
+        createdAt: timestamp ?? new Date(0).toISOString(),
+        text: assistantText,
+      });
+      assistantIndex += 1;
+    }
+  }
+  return out;
+}
+
 function compareByRelevanceThenMtime(a: RawSummary, b: RawSummary): number {
   if (b.relevanceScore !== a.relevanceScore) return b.relevanceScore - a.relevanceScore;
   return b.modifiedAtMs - a.modifiedAtMs;
@@ -615,7 +769,72 @@ const makeExternalSessionDirectory = Effect.gen(function* () {
     }).pipe(Effect.mapError(toScanError("ExternalSessionDirectory.listForCwd")));
   };
 
-  return { listForCwd } satisfies ExternalSessionDirectoryShape;
+  const getMessages: ExternalSessionDirectoryShape["getMessages"] = (input) =>
+    Effect.gen(function* () {
+      const home = NodeOS.homedir();
+      let filePath: string;
+      if (input.provider === "claude") {
+        const projectsRoot = path.join(home, ".claude", "projects");
+        const dir = path.join(projectsRoot, encodeClaudeCwd(input.cwd));
+        filePath = path.join(dir, `${input.sessionId}.jsonl`);
+      } else {
+        // Codex sessions are bucketed by date. We don't know the exact path from the
+        // sessionId alone, so search for it. Cheap because we already filter by mtime.
+        const sessionsRoot = path.join(home, ".codex", "sessions");
+        const found = yield* findCodexFileBySessionId(sessionsRoot, input.sessionId);
+        if (!found) {
+          return { entries: [] } satisfies ExternalSessionMessagesResult;
+        }
+        filePath = found;
+      }
+      const contentsOpt = yield* fs.readFileString(filePath).pipe(Effect.option);
+      if (contentsOpt._tag === "None") {
+        return { entries: [] } satisfies ExternalSessionMessagesResult;
+      }
+      const entries =
+        input.provider === "claude"
+          ? parseClaudeImports(contentsOpt.value, input.sessionId)
+          : parseCodexImports(contentsOpt.value, input.sessionId);
+      return { entries } satisfies ExternalSessionMessagesResult;
+    }).pipe(Effect.mapError(toScanError("ExternalSessionDirectory.getMessages")));
+
+  const findCodexFileBySessionId = (
+    sessionsRoot: string,
+    sessionId: string,
+  ): Effect.Effect<string | null, never> =>
+    Effect.gen(function* () {
+      const exists = yield* directoryExists(sessionsRoot);
+      if (!exists) return null;
+      const yearDirs = yield* fs
+        .readDirectory(sessionsRoot)
+        .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<string>));
+      for (const year of yearDirs) {
+        const yearPath = path.join(sessionsRoot, year);
+        const months = yield* fs
+          .readDirectory(yearPath)
+          .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<string>));
+        for (const month of months) {
+          const monthPath = path.join(yearPath, month);
+          const days = yield* fs
+            .readDirectory(monthPath)
+            .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<string>));
+          for (const day of days) {
+            const dayPath = path.join(monthPath, day);
+            const files = yield* fs
+              .readDirectory(dayPath)
+              .pipe(Effect.orElseSucceed(() => [] as ReadonlyArray<string>));
+            for (const file of files) {
+              if (file.endsWith(`${sessionId}.jsonl`)) {
+                return path.join(dayPath, file);
+              }
+            }
+          }
+        }
+      }
+      return null;
+    });
+
+  return { listForCwd, getMessages } satisfies ExternalSessionDirectoryShape;
 });
 
 export const ExternalSessionDirectoryLive = Layer.effect(
