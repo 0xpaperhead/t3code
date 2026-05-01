@@ -558,7 +558,6 @@ const buildAppUnderTest = (options?: {
       ),
       Layer.provide(
         Layer.mock(OrchestratorService)({
-          listRoles: () => Effect.succeed([]),
           listWorkers: () => Effect.succeed([]),
           promote: (threadId) => Effect.succeed({ threadId, isMaster: true }),
           demote: (threadId) => Effect.succeed({ threadId, isMaster: false }),

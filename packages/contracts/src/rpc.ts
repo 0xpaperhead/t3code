@@ -29,9 +29,6 @@ import {
   OrchestratorIsMasterInput,
   OrchestratorIsMasterResult,
   OrchestratorIsMasterError,
-  OrchestratorListRolesInput,
-  OrchestratorListRolesResult,
-  OrchestratorListRolesError,
   OrchestratorListWorkersInput,
   OrchestratorListWorkersResult,
   OrchestratorListWorkersError,
@@ -129,7 +126,6 @@ export const WS_METHODS = {
   externalSessionsGetResumeMeta: "externalSessions.getResumeMeta",
 
   // Orchestrator (master/worker) methods
-  orchestratorListRoles: "orchestrator.listRoles",
   orchestratorPromote: "orchestrator.promote",
   orchestratorDemote: "orchestrator.demote",
   orchestratorIsMaster: "orchestrator.isMaster",
@@ -257,12 +253,6 @@ export const WsExternalSessionsGetResumeMetaRpc = Rpc.make(
     error: ExternalSessionsGetResumeMetaError,
   },
 );
-
-export const WsOrchestratorListRolesRpc = Rpc.make(WS_METHODS.orchestratorListRoles, {
-  payload: OrchestratorListRolesInput,
-  success: OrchestratorListRolesResult,
-  error: OrchestratorListRolesError,
-});
 
 export const WsOrchestratorPromoteRpc = Rpc.make(WS_METHODS.orchestratorPromote, {
   payload: OrchestratorPromoteInput,
@@ -478,7 +468,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsExternalSessionsBindResumeRpc,
   WsExternalSessionsGetMessagesRpc,
   WsExternalSessionsGetResumeMetaRpc,
-  WsOrchestratorListRolesRpc,
   WsOrchestratorPromoteRpc,
   WsOrchestratorDemoteRpc,
   WsOrchestratorIsMasterRpc,

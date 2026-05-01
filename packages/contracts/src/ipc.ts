@@ -32,8 +32,6 @@ import type {
 import type {
   OrchestratorIsMasterInput,
   OrchestratorIsMasterResult,
-  OrchestratorListRolesInput,
-  OrchestratorListRolesResult,
   OrchestratorListWorkersInput,
   OrchestratorListWorkersResult,
   OrchestratorPromoteInput,
@@ -291,7 +289,6 @@ export interface EnvironmentApi {
     ) => Promise<ExternalSessionsGetResumeMetaResult>;
   };
   orchestrator: {
-    listRoles: (input: OrchestratorListRolesInput) => Promise<OrchestratorListRolesResult>;
     promote: (input: OrchestratorPromoteInput) => Promise<OrchestratorPromoteResult>;
     demote: (input: OrchestratorDemoteInput) => Promise<OrchestratorDemoteResult>;
     isMaster: (input: OrchestratorIsMasterInput) => Promise<OrchestratorIsMasterResult>;

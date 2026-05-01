@@ -43,7 +43,6 @@ class ClaudeAdapter extends Context.Service<ClaudeAdapter, ClaudeAdapterShape>()
 const orchestratorTestLayers = Layer.mergeAll(
   Layer.mock(OrchestratorService)({
     isMaster: () => Effect.succeed(false),
-    listRoles: () => Effect.succeed([]),
     listWorkers: () => Effect.succeed([]),
     promote: (threadId) => Effect.succeed({ threadId, isMaster: true }),
     demote: (threadId) => Effect.succeed({ threadId, isMaster: false }),

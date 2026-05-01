@@ -18,7 +18,6 @@ import { ServerLifecycleEventsLive } from "./serverLifecycleEvents.ts";
 import { AnalyticsServiceLayerLive } from "./telemetry/Layers/AnalyticsService.ts";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";
 import { ExternalSessionDirectoryLive } from "./provider/Layers/ExternalSessionDirectory.ts";
-import { OrchestratorRolesLive } from "./orchestrator/roles.ts";
 import { OrchestratorServiceLive } from "./orchestrator/OrchestratorService.ts";
 import { ClaudeOrchestratorBridgeLive } from "./orchestrator/ClaudeOrchestratorBridge.ts";
 import { ProviderSessionRuntimeRepositoryLive } from "./persistence/Layers/ProviderSessionRuntime.ts";
@@ -151,14 +150,12 @@ const ProviderSessionDirectoryLayerLive = ProviderSessionDirectoryLive.pipe(
 // into a single layer so the top-level RuntimeDependenciesLive pipe stays
 // under TypeScript's 20-arg overload limit.
 const OrchestratorServiceLayerLive = OrchestratorServiceLive.pipe(
-  Layer.provide(OrchestratorRolesLive),
   Layer.provide(ProviderSessionDirectoryLayerLive),
 );
 
 const ProjectAuxiliaryServicesLive = Layer.mergeAll(
   ProjectFaviconResolverLive,
   ExternalSessionDirectoryLive,
-  OrchestratorRolesLive,
   OrchestratorServiceLayerLive,
   // Bundle the four services ClaudeAdapter needs at session-start into a
   // single tag the driver yields. Avoids widening ClaudeDriverEnv to four

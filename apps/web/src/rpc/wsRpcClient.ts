@@ -78,7 +78,6 @@ export interface WsRpcClient {
     readonly getResumeMeta: RpcUnaryMethod<typeof WS_METHODS.externalSessionsGetResumeMeta>;
   };
   readonly orchestrator: {
-    readonly listRoles: RpcUnaryMethod<typeof WS_METHODS.orchestratorListRoles>;
     readonly promote: RpcUnaryMethod<typeof WS_METHODS.orchestratorPromote>;
     readonly demote: RpcUnaryMethod<typeof WS_METHODS.orchestratorDemote>;
     readonly isMaster: RpcUnaryMethod<typeof WS_METHODS.orchestratorIsMaster>;
@@ -181,8 +180,6 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
         transport.request((client) => client[WS_METHODS.externalSessionsGetResumeMeta](input)),
     },
     orchestrator: {
-      listRoles: (input) =>
-        transport.request((client) => client[WS_METHODS.orchestratorListRoles](input)),
       promote: (input) =>
         transport.request((client) => client[WS_METHODS.orchestratorPromote](input)),
       demote: (input) =>

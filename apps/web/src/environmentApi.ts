@@ -30,7 +30,6 @@ export function createEnvironmentApi(rpcClient: WsRpcClient): EnvironmentApi {
       getResumeMeta: rpcClient.externalSessions.getResumeMeta,
     },
     orchestrator: {
-      listRoles: rpcClient.orchestrator.listRoles,
       promote: rpcClient.orchestrator.promote,
       demote: rpcClient.orchestrator.demote,
       isMaster: rpcClient.orchestrator.isMaster,

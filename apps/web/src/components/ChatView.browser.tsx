@@ -221,9 +221,6 @@ function createMockEnvironmentApi(input: {
       }) as EnvironmentApi["externalSessions"]["getResumeMeta"],
     },
     orchestrator: {
-      listRoles: (() => {
-        throw new Error("Not implemented in browser test.");
-      }) as EnvironmentApi["orchestrator"]["listRoles"],
       promote: (() => {
         throw new Error("Not implemented in browser test.");
       }) as EnvironmentApi["orchestrator"]["promote"],

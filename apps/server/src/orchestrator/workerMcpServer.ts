@@ -7,13 +7,14 @@
  * subprocess, no HTTP loopback. Tool handlers receive plain JSON args and run
  * t3code's orchestration via the `runEffect` callback supplied at construction.
  *
- * v1 tools:
- *   - list_roles         (enumerate available worker roles)
+ * Tools:
  *   - list_workers       (enumerate workers spawned by this master)
  *   - spawn_worker       (create a worker thread + send its first task)
  *   - read_worker_output (read a worker's current message transcript)
  *
- * Future tools: wait_for_worker, send_to_worker, kill_worker, wait_for_any.
+ * Workers are plain Claude threads — same model, same tools, same permissions
+ * as the master. No system prompt overrides, no role-based tool restrictions.
+ * The master shapes worker behavior through the `task` text.
  */
 
 import {
@@ -22,7 +23,6 @@ import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   MessageId,
-  type OrchestratorRole,
   type OrchestratorWorkerSummary,
   ProviderDriverKind,
   ThreadId,
@@ -81,35 +81,10 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
   const runEffect = <A, E>(effect: Effect.Effect<A, E, never>): Promise<A> =>
     Effect.runPromise(effect as Effect.Effect<A, never, never>);
 
-  // ----- list_roles -----------------------------------------------------
-  const listRolesTool = tool(
-    "list_roles",
-    "List worker roles you can spawn. Each role pre-configures a system prompt and (optionally) tool restrictions.",
-    {},
-    async () => {
-      try {
-        const roles = await runEffect(orchestratorService.listRoles());
-        const summaries = roles.map((role: OrchestratorRole) => ({
-          id: role.id,
-          name: role.name,
-          description: role.description ?? null,
-          allowedTools: role.allowedTools ?? null,
-          disallowedTools: role.disallowedTools ?? null,
-          permissionMode: role.permissionMode ?? null,
-        }));
-        return jsonText({ roles: summaries });
-      } catch (error) {
-        return errorResult(
-          `list_roles failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    },
-  );
-
   // ----- list_workers ---------------------------------------------------
   const listWorkersTool = tool(
     "list_workers",
-    "List worker threads you have spawned. Returns each worker's threadId, role, status, and spawnedAt.",
+    "List worker threads you have spawned. Returns each worker's threadId, status, and spawnedAt.",
     {},
     async () => {
       try {
@@ -119,7 +94,6 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
         return jsonText({
           workers: workers.map((w: OrchestratorWorkerSummary) => ({
             threadId: w.threadId,
-            roleId: w.roleId ?? null,
             status: w.status,
             spawnedAt: w.spawnedAt,
           })),
@@ -135,61 +109,23 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
   // ----- spawn_worker ---------------------------------------------------
   const spawnWorkerInputSchema = {
     task: z.string().min(1).describe("The first prompt the worker will receive."),
-    role: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        "Optional role id (call list_roles to see available roles). If omitted, you can supply systemPrompt/allowedTools/disallowedTools inline.",
-      ),
-    systemPrompt: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        "Inline system prompt for the worker, used when role is omitted or to override the role's system prompt.",
-      ),
-    allowedTools: z
-      .array(z.string())
-      .optional()
-      .describe("Optional whitelist of tool names the worker may use."),
-    disallowedTools: z
-      .array(z.string())
-      .optional()
-      .describe("Optional blacklist of tool names the worker may not use."),
     title: z
       .string()
       .min(1)
       .max(120)
       .optional()
-      .describe("Optional thread title. Defaults to the role's name (or 'Worker')."),
+      .describe(
+        "Optional thread title shown in the sidebar. Defaults to the first 60 characters of the task.",
+      ),
   };
 
   const spawnWorkerTool = tool(
     "spawn_worker",
-    "Spawn a worker thread that will execute `task`. Returns immediately with the worker's threadId; the worker runs asynchronously. Use list_workers / read_worker_output to observe progress.",
+    "Spawn a worker thread that will execute `task`. The worker is a normal Claude thread with full default capabilities; shape its behavior through the task text. Returns immediately with the worker's threadId; the worker runs asynchronously. Use list_workers / read_worker_output to observe progress.",
     spawnWorkerInputSchema,
     async (args) => {
       try {
         const program = Effect.gen(function* () {
-          // Resolve role config (inline overrides take precedence per field).
-          const resolvedRole = args.role
-            ? yield* Effect.promise(() =>
-                runEffect(
-                  Effect.gen(function* () {
-                    const roles = yield* orchestratorService.listRoles();
-                    return roles.find((r) => r.id === args.role) ?? null;
-                  }),
-                ),
-              )
-            : null;
-          const systemPrompt =
-            args.systemPrompt ?? resolvedRole?.systemPrompt ?? "You are a helpful coding assistant.";
-          const allowedTools = args.allowedTools ?? resolvedRole?.allowedTools;
-          const disallowedTools = args.disallowedTools ?? resolvedRole?.disallowedTools;
-          const permissionMode = resolvedRole?.permissionMode ?? "default";
-          const titleSeed = args.title ?? resolvedRole?.name ?? "Worker";
-
           // Look up master's project so the worker is scoped to the same project.
           const masterShellOpt = yield* projectionSnapshotQuery
             .getThreadShellById(ThreadId.make(masterThreadId))
@@ -203,15 +139,15 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
           const projectId = masterShell.projectId;
           const workerThreadId = ThreadId.make(crypto.randomUUID());
           const spawnedAt = new Date().toISOString();
+          const titleSeed =
+            args.title ?? (args.task.length > 60 ? `${args.task.slice(0, 57)}…` : args.task);
 
           const claudeDriverKind = ProviderDriverKind.make("claudeAgent");
           const claudeInstanceId = defaultInstanceIdForDriver(claudeDriverKind);
           const claudeDefaultModel = DEFAULT_MODEL_BY_PROVIDER[claudeDriverKind] ?? "claude-sonnet-4-6";
 
-          // Pre-seed the worker binding with role config + workerOf marker BEFORE
-          // dispatching thread.create, so the adapter can read them on the first turn.
-          // providerInstanceId is required by upsert validation post multi-provider
-          // refactor — routes the runtime to the configured Claude instance.
+          // Pre-seed the worker binding with workerOf marker so the sidebar
+          // can locate the worker's master and list_workers can find it.
           yield* providerSessionDirectory.upsert({
             threadId: workerThreadId,
             provider: claudeDriverKind,
@@ -222,15 +158,8 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
             runtimePayload: {
               workerOf: {
                 masterThreadId,
-                ...(args.role ? { roleId: args.role } : {}),
                 spawnedAt,
                 projectId,
-              },
-              workerConfig: {
-                systemPrompt,
-                ...(allowedTools ? { allowedTools } : {}),
-                ...(disallowedTools ? { disallowedTools } : {}),
-                permissionMode,
               },
             },
           });
@@ -331,6 +260,6 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
   return createSdkMcpServer({
     name: "t3_orchestrator",
     version: "0.1.0",
-    tools: [listRolesTool, listWorkersTool, spawnWorkerTool, readWorkerOutputTool],
+    tools: [listWorkersTool, spawnWorkerTool, readWorkerOutputTool],
   });
 }

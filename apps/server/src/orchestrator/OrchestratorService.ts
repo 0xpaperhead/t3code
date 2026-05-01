@@ -24,9 +24,12 @@
  *   - One-RPC round-trip when toggling. Negligible on localhost.
  *   - The binding can outlive an abandoned draft thread. Cleaned up by
  *     ThreadDeletionReactor when the thread is deleted.
+ *
+ * Workers are plain Claude threads — no role-based system prompts, no tool
+ * restrictions. The master shapes worker behavior through the `task` text
+ * passed to spawn_worker.
  */
 import {
-  type OrchestratorRole,
   type OrchestratorWorkerSummary,
   ProjectId,
   ProviderDriverKind,
@@ -36,7 +39,6 @@ import {
 import { Context, Data, Effect, Layer } from "effect";
 
 import { ProviderSessionDirectory } from "../provider/Services/ProviderSessionDirectory.ts";
-import { OrchestratorRoles } from "./roles.ts";
 
 export class OrchestratorPromoteFailure extends Data.TaggedError(
   "OrchestratorPromoteFailure",
@@ -49,7 +51,6 @@ interface OrchestratorBindingPayload {
   readonly orchestrator?: { readonly isMaster: boolean };
   readonly workerOf?: {
     readonly masterThreadId: string;
-    readonly roleId?: string;
     readonly spawnedAt: string;
     readonly projectId?: string;
   };
@@ -69,7 +70,6 @@ function deriveStatus(
 }
 
 export interface OrchestratorServiceShape {
-  readonly listRoles: () => Effect.Effect<ReadonlyArray<OrchestratorRole>, never>;
   readonly listWorkers: (input: {
     readonly masterThreadId?: string;
   }) => Effect.Effect<ReadonlyArray<OrchestratorWorkerSummary>, never>;
@@ -89,9 +89,6 @@ export class OrchestratorService extends Context.Service<
 
 const makeOrchestratorService = Effect.gen(function* () {
   const directory = yield* ProviderSessionDirectory;
-  const roles = yield* OrchestratorRoles;
-
-  const listRoles: OrchestratorServiceShape["listRoles"] = () => roles.listRoles;
 
   const listWorkers: OrchestratorServiceShape["listWorkers"] = (input) =>
     Effect.gen(function* () {
@@ -112,7 +109,6 @@ const makeOrchestratorService = Effect.gen(function* () {
           threadId: binding.threadId,
           masterThreadId: ThreadId.make(payload.workerOf.masterThreadId),
           projectId: ProjectId.make(payload.workerOf.projectId ?? "unknown"),
-          ...(payload.workerOf.roleId ? { roleId: payload.workerOf.roleId } : {}),
           spawnedAt: payload.workerOf.spawnedAt,
           status: deriveStatus(binding.status),
         };
@@ -192,7 +188,7 @@ const makeOrchestratorService = Effect.gen(function* () {
       return payload.orchestrator?.isMaster === true;
     });
 
-  return { listRoles, listWorkers, promote, demote, isMaster } satisfies OrchestratorServiceShape;
+  return { listWorkers, promote, demote, isMaster } satisfies OrchestratorServiceShape;
 });
 
 export const OrchestratorServiceLive = Layer.effect(OrchestratorService, makeOrchestratorService);

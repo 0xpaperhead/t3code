@@ -11,7 +11,6 @@ import {
   ExternalSessionsGetMessagesError,
   ExternalSessionsGetResumeMetaError,
   OrchestratorIsMasterError,
-  OrchestratorListRolesError,
   OrchestratorListWorkersError,
   OrchestratorPromotionError,
   ProviderDriverKind,
@@ -915,23 +914,6 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               ),
             ),
             { "rpc.aggregate": "externalSessions" },
-          ),
-        [WS_METHODS.orchestratorListRoles]: (_input) =>
-          observeRpcEffect(
-            WS_METHODS.orchestratorListRoles,
-            Effect.gen(function* () {
-              const roles = yield* orchestratorService.listRoles();
-              return { roles };
-            }).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new OrchestratorListRolesError({
-                    message: "Failed to list orchestrator roles.",
-                    cause,
-                  }),
-              ),
-            ),
-            { "rpc.aggregate": "orchestrator" },
           ),
         [WS_METHODS.orchestratorPromote]: (input) =>
           observeRpcEffect(
