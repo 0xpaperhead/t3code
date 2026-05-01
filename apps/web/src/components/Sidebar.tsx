@@ -351,6 +351,17 @@ interface SidebarThreadRowProps {
    * its master.
    */
   isNestedWorker?: boolean;
+  /**
+   * When this thread is a master with at least one rendered worker, the
+   * sidebar passes `workerToggle` so the row can render a chevron that
+   * collapses/expands the worker subtree without affecting the row's main
+   * click-to-open behavior.
+   */
+  workerToggle?: {
+    readonly isCollapsed: boolean;
+    readonly onToggle: () => void;
+    readonly workerCount: number;
+  };
 }
 
 const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowProps) {
@@ -607,6 +618,34 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         onContextMenu={handleRowContextMenu}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+          {props.workerToggle ? (
+            <button
+              type="button"
+              aria-label={
+                props.workerToggle.isCollapsed
+                  ? `Expand ${props.workerToggle.workerCount} worker${
+                      props.workerToggle.workerCount === 1 ? "" : "s"
+                    }`
+                  : `Collapse workers`
+              }
+              aria-expanded={!props.workerToggle.isCollapsed}
+              className="-ml-1 inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/70 hover:bg-secondary hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={(event) => {
+                event.stopPropagation();
+                event.preventDefault();
+                props.workerToggle?.onToggle();
+              }}
+              title={`${props.workerToggle.workerCount} worker${
+                props.workerToggle.workerCount === 1 ? "" : "s"
+              } · click to ${props.workerToggle.isCollapsed ? "expand" : "collapse"}`}
+            >
+              <ChevronRightIcon
+                className={`size-3 transition-transform ${
+                  props.workerToggle.isCollapsed ? "" : "rotate-90"
+                }`}
+              />
+            </button>
+          ) : null}
           {prStatus && (
             <Tooltip>
               <TooltipTrigger
@@ -859,6 +898,11 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
   } = props;
   const showMoreButtonRender = useMemo(() => <button type="button" />, []);
   const showLessButtonRender = useMemo(() => <button type="button" />, []);
+  // Track which masters have their worker subtree collapsed. Default is
+  // expanded; ephemeral state, doesn't persist across remounts.
+  const [collapsedMasters, setCollapsedMasters] = useState<ReadonlySet<ThreadId>>(
+    () => new Set(),
+  );
 
   return (
     <SidebarMenuSub
@@ -895,7 +939,11 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
             }
           }
 
-          const renderRow = (thread: SidebarThreadSummary, isNestedWorker: boolean) => {
+          const renderRow = (
+            thread: SidebarThreadSummary,
+            isNestedWorker: boolean,
+            workerToggle?: SidebarThreadRowProps["workerToggle"],
+          ) => {
             const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
             return (
               <SidebarThreadRow
@@ -924,16 +972,34 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
                 attemptArchiveThread={attemptArchiveThread}
                 openPrLink={openPrLink}
                 isNestedWorker={isNestedWorker}
+                {...(workerToggle ? { workerToggle } : {})}
               />
             );
+          };
+
+          const toggleCollapsed = (masterId: ThreadId) => {
+            setCollapsedMasters((prev) => {
+              const next = new Set(prev);
+              if (next.has(masterId)) next.delete(masterId);
+              else next.add(masterId);
+              return next;
+            });
           };
 
           const elements: React.ReactNode[] = [];
           for (const thread of renderedThreads) {
             if (renderedIds.has(thread.id)) continue;
-            elements.push(renderRow(thread, false));
             const workers = childrenByMasterId.get(thread.id);
-            if (workers) {
+            const isCollapsed = collapsedMasters.has(thread.id);
+            const workerToggle = workers
+              ? {
+                  isCollapsed,
+                  onToggle: () => toggleCollapsed(thread.id),
+                  workerCount: workers.length,
+                }
+              : undefined;
+            elements.push(renderRow(thread, false, workerToggle));
+            if (workers && !isCollapsed) {
               for (const worker of workers) {
                 elements.push(renderRow(worker, true));
               }
