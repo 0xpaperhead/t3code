@@ -1,5 +1,5 @@
 import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { readEnvironmentApi } from "../environmentApi";
 
@@ -8,8 +8,11 @@ interface UseThreadIsMasterResult {
   readonly isLoading: boolean;
   readonly error: string | null;
   /**
-   * Toggle the master flag. Optimistically flips local state, then calls the
-   * server, and rolls back on failure.
+   * Toggle the master flag. Optimistically flips local state, calls the
+   * server, and rolls back on failure. Bumps an internal generation
+   * counter so any in-flight initial fetch gets discarded — otherwise a
+   * slow initial isMaster() can resolve after the click and stomp the
+   * optimistic update with the stale `false`.
    */
   readonly toggle: () => Promise<void>;
 }
@@ -25,8 +28,14 @@ export function useThreadIsMaster(
   const [isMaster, setIsMaster] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bumped on every effect run AND every toggle. State updates only apply if
+  // the generation captured at the start of the operation still matches.
+  const generationRef = useRef(0);
 
   useEffect(() => {
+    generationRef.current += 1;
+    const myGeneration = generationRef.current;
+
     if (!environmentId || !threadId) {
       setIsMaster(false);
       setIsLoading(false);
@@ -39,31 +48,30 @@ export function useThreadIsMaster(
       setIsLoading(false);
       return;
     }
-    let cancelled = false;
     setIsLoading(true);
     setError(null);
     api.orchestrator
       .isMaster({ threadId })
       .then((result) => {
-        if (cancelled) return;
+        if (myGeneration !== generationRef.current) return;
         setIsMaster(result.isMaster);
         setIsLoading(false);
       })
       .catch((reason: unknown) => {
-        if (cancelled) return;
+        if (myGeneration !== generationRef.current) return;
         setIsMaster(false);
         setIsLoading(false);
         setError(reason instanceof Error ? reason.message : "Failed to read orchestrator state.");
       });
-    return () => {
-      cancelled = true;
-    };
   }, [environmentId, threadId]);
 
   const toggle = useCallback(async () => {
     if (!environmentId || !threadId) return;
     const api = readEnvironmentApi(environmentId);
     if (!api) return;
+    // Bump first so any in-flight initial fetch's resolution is discarded.
+    generationRef.current += 1;
+    const myGeneration = generationRef.current;
     const next = !isMaster;
     setIsMaster(next);
     setError(null);
@@ -73,8 +81,10 @@ export function useThreadIsMaster(
       } else {
         await api.orchestrator.demote({ threadId });
       }
+      // No state mutation on success — optimistic update already reflects
+      // the new value.
     } catch (reason: unknown) {
-      // Roll back on failure.
+      if (myGeneration !== generationRef.current) return;
       setIsMaster(!next);
       setError(reason instanceof Error ? reason.message : "Failed to toggle orchestrator state.");
     }
