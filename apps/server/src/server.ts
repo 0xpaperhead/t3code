@@ -151,6 +151,7 @@ const ProviderSessionDirectoryLayerLive = ProviderSessionDirectoryLive.pipe(
 // under TypeScript's 20-arg overload limit.
 const OrchestratorServiceLayerLive = OrchestratorServiceLive.pipe(
   Layer.provide(ProviderSessionDirectoryLayerLive),
+  Layer.provide(OrchestrationLayerLive),
 );
 
 const ProjectAuxiliaryServicesLive = Layer.mergeAll(

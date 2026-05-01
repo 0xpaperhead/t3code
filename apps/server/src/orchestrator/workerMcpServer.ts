@@ -222,7 +222,7 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
 
   const readWorkerOutputTool = tool(
     "read_worker_output",
-    "Read the current message transcript of a worker thread. Returns user/assistant turns; tool actions are summarized.",
+    "Read the current message transcript of a worker thread. Returns latest turn state (running/idle/etc), the full message transcript, and the last assistant message text. Tool actions are not included — use list_workers for at-a-glance status across all workers.",
     readWorkerOutputInputSchema,
     async (args) => {
       try {
@@ -244,9 +244,33 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
               : "(non-text content)",
           createdAt: message.createdAt,
         }));
+        const lastAssistantMessage = [...messages]
+          .reverse()
+          .find((m) => m.role === "assistant");
+        const latestTurn = detail.latestTurn;
+        const turnState = latestTurn?.state ?? null;
+        const status = turnState === "running"
+          ? "running"
+          : turnState === "completed"
+            ? "idle"
+            : turnState === "interrupted"
+              ? "stopped"
+              : turnState === "error"
+                ? "errored"
+                : "unknown";
         return jsonText({
           threadId: args.threadId,
+          status,
+          latestTurn: latestTurn
+            ? {
+                state: latestTurn.state,
+                requestedAt: latestTurn.requestedAt,
+                startedAt: latestTurn.startedAt,
+                completedAt: latestTurn.completedAt,
+              }
+            : null,
           messageCount: messages.length,
+          lastAssistantText: lastAssistantMessage?.text ?? null,
           messages,
         });
       } catch (error) {

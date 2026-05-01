@@ -30,14 +30,16 @@
  * passed to spawn_worker.
  */
 import {
+  type OrchestrationLatestTurn,
   type OrchestratorWorkerSummary,
   ProjectId,
   ProviderDriverKind,
   ThreadId,
   defaultInstanceIdForDriver,
 } from "@t3tools/contracts";
-import { Context, Data, Effect, Layer } from "effect";
+import { Context, Data, Effect, Layer, Option } from "effect";
 
+import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ProviderSessionDirectory } from "../provider/Services/ProviderSessionDirectory.ts";
 
 export class OrchestratorPromoteFailure extends Data.TaggedError(
@@ -54,6 +56,8 @@ interface OrchestratorBindingPayload {
     readonly spawnedAt: string;
     readonly projectId?: string;
   };
+  // `roleId` was on this shape until the role system was deleted. Old
+  // bindings on disk may still carry it; we read but ignore it.
 }
 
 function readPayload(value: unknown): OrchestratorBindingPayload {
@@ -61,12 +65,31 @@ function readPayload(value: unknown): OrchestratorBindingPayload {
   return value as OrchestratorBindingPayload;
 }
 
-function deriveStatus(
-  status: string | undefined,
+/**
+ * Derive worker status from the projection's latestTurn — NOT the binding's
+ * `status` field. The binding's status tracks the SDK session lifecycle
+ * (alive/dormant), which would falsely report a worker as "running" between
+ * turns or after a turn completes while the SDK session is still warm.
+ *
+ * latestTurn.state is the per-turn signal the master actually wants:
+ * is the worker currently processing, or is it done?
+ */
+function deriveStatusFromLatestTurn(
+  latestTurn: OrchestrationLatestTurn | null,
 ): OrchestratorWorkerSummary["status"] {
-  if (status === "running" || status === "idle" || status === "stopped") return status;
-  if (status === "errored") return "errored";
-  return "unknown";
+  if (!latestTurn) return "idle";
+  switch (latestTurn.state) {
+    case "running":
+      return "running";
+    case "completed":
+      return "idle";
+    case "interrupted":
+      return "stopped";
+    case "error":
+      return "errored";
+    default:
+      return "unknown";
+  }
 }
 
 export interface OrchestratorServiceShape {
@@ -89,6 +112,7 @@ export class OrchestratorService extends Context.Service<
 
 const makeOrchestratorService = Effect.gen(function* () {
   const directory = yield* ProviderSessionDirectory;
+  const projection = yield* ProjectionSnapshotQuery;
 
   const listWorkers: OrchestratorServiceShape["listWorkers"] = (input) =>
     Effect.gen(function* () {
@@ -105,12 +129,20 @@ const makeOrchestratorService = Effect.gen(function* () {
         ) {
           continue;
         }
+        // Read latestTurn.state from the projection — this is the per-turn
+        // signal that tells us whether the worker is actively processing.
+        const shellOpt = yield* projection
+          .getThreadShellById(binding.threadId)
+          .pipe(Effect.orElseSucceed(() => Option.none()));
+        const latestTurn = Option.isSome(shellOpt)
+          ? shellOpt.value.latestTurn
+          : null;
         const summary: OrchestratorWorkerSummary = {
           threadId: binding.threadId,
           masterThreadId: ThreadId.make(payload.workerOf.masterThreadId),
           projectId: ProjectId.make(payload.workerOf.projectId ?? "unknown"),
           spawnedAt: payload.workerOf.spawnedAt,
-          status: deriveStatus(binding.status),
+          status: deriveStatusFromLatestTurn(latestTurn),
         };
         out.push(summary);
       }
