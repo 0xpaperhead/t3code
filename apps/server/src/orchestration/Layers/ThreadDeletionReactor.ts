@@ -3,6 +3,7 @@ import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import { Cause, Effect, Layer, Stream } from "effect";
 
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
+import { ProviderSessionDirectory } from "../../provider/Services/ProviderSessionDirectory.ts";
 import { TerminalManager } from "../../terminal/Services/Manager.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import {
@@ -36,6 +37,7 @@ export const logCleanupCauseUnlessInterrupted = <R, E>({
 const make = Effect.gen(function* () {
   const orchestrationEngine = yield* OrchestrationEngineService;
   const providerService = yield* ProviderService;
+  const providerSessionDirectory = yield* ProviderSessionDirectory;
   const terminalManager = yield* TerminalManager;
 
   const stopProviderSession = (threadId: ThreadDeletedEvent["payload"]["threadId"]) =>
@@ -52,12 +54,25 @@ const make = Effect.gen(function* () {
       threadId,
     });
 
+  // Wipe the ProviderSessionDirectory binding row so resumeCursor,
+  // orchestrator markers, workerOf linkage, and externalResume metadata
+  // don't outlive their thread. Idempotent — safe even if no row exists.
+  const clearProviderSessionBinding = (
+    threadId: ThreadDeletedEvent["payload"]["threadId"],
+  ) =>
+    logCleanupCauseUnlessInterrupted({
+      effect: providerSessionDirectory.delete(threadId),
+      message: "thread deletion cleanup skipped provider session binding delete",
+      threadId,
+    });
+
   const processThreadDeleted = Effect.fn("processThreadDeleted")(function* (
     event: ThreadDeletedEvent,
   ) {
     const { threadId } = event.payload;
     yield* stopProviderSession(threadId);
     yield* closeThreadTerminals(threadId);
+    yield* clearProviderSessionBinding(threadId);
   });
 
   const processThreadDeletedSafely = (event: ThreadDeletedEvent) =>

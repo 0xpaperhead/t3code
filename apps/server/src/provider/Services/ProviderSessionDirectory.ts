@@ -61,6 +61,16 @@ export interface ProviderSessionDirectoryShape {
     ReadonlyArray<ProviderRuntimeBindingWithMetadata>,
     ProviderSessionDirectoryPersistenceError
   >;
+
+  /**
+   * Delete a thread's binding row. Idempotent — no error if no row exists.
+   * Called from ThreadDeletionReactor on `thread.deleted` so resumeCursor,
+   * orchestrator markers, workerOf linkage, and externalResume metadata
+   * don't outlive their threads.
+   */
+  readonly delete: (
+    threadId: ThreadId,
+  ) => Effect.Effect<void, ProviderSessionDirectoryPersistenceError>;
 }
 
 export class ProviderSessionDirectory extends Context.Service<

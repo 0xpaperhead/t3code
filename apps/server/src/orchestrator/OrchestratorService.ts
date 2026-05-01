@@ -1,3 +1,30 @@
+/**
+ * OrchestratorService — server-side state for "is this thread an orchestrator
+ * (master) that can spawn worker Claude instances?"
+ *
+ * Why this lives in the binding's runtimePayload (server-side) instead of the
+ * composer draft store (client-side) like the other toolbar toggles
+ * (model, runtime mode, interaction mode):
+ *
+ * The ClaudeAdapter reads `runtimePayload.orchestrator.isMaster` from the
+ * ProviderSessionDirectory binding when it starts a session, to decide
+ * whether to attach the in-process MCP server. The binding is the source
+ * of truth the runtime actually consults.
+ *
+ * Putting the toggle in the composer draft store would mean shipping its
+ * value through `thread.create`, having the decider/projector translate
+ * that into a binding mutation, then having the adapter read the binding
+ * anyway — three layers of indirection encoding the same fact. Keeping
+ * the marker on the binding directly is the cleanest cut.
+ *
+ * Visible tradeoffs:
+ *   - No "sticky" preference layer (every new thread starts un-promoted).
+ *     This is intentional: orchestrator threads spawn workers with real
+ *     side effects; opt-in per-thread is a feature, not a bug.
+ *   - One-RPC round-trip when toggling. Negligible on localhost.
+ *   - The binding can outlive an abandoned draft thread. Cleaned up by
+ *     ThreadDeletionReactor when the thread is deleted.
+ */
 import {
   type OrchestratorRole,
   type OrchestratorWorkerSummary,
