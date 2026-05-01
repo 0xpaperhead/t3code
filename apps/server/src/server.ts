@@ -18,6 +18,8 @@ import { ServerLifecycleEventsLive } from "./serverLifecycleEvents.ts";
 import { AnalyticsServiceLayerLive } from "./telemetry/Layers/AnalyticsService.ts";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";
 import { ExternalSessionDirectoryLive } from "./provider/Layers/ExternalSessionDirectory.ts";
+import { OrchestratorRolesLive } from "./orchestrator/roles.ts";
+import { OrchestratorServiceLive } from "./orchestrator/OrchestratorService.ts";
 import { ProviderSessionRuntimeRepositoryLive } from "./persistence/Layers/ProviderSessionRuntime.ts";
 import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRegistry.ts";
 import { ProviderEventLoggersLive } from "./provider/Layers/ProviderEventLoggers.ts";
@@ -228,6 +230,13 @@ const RuntimeDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(WorkspaceLayerLive),
   Layer.provideMerge(ProjectFaviconResolverLive),
   Layer.provideMerge(ExternalSessionDirectoryLive),
+  Layer.provideMerge(OrchestratorRolesLive),
+  Layer.provideMerge(
+    OrchestratorServiceLive.pipe(
+      Layer.provide(OrchestratorRolesLive),
+      Layer.provide(ProviderSessionDirectoryLayerLive),
+    ),
+  ),
   Layer.provideMerge(RepositoryIdentityResolverLive),
   Layer.provideMerge(ServerEnvironmentLive),
   Layer.provideMerge(AuthLayerLive),

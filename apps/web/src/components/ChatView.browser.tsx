@@ -220,6 +220,20 @@ function createMockEnvironmentApi(input: {
         throw new Error("Not implemented in browser test.");
       }) as EnvironmentApi["externalSessions"]["getResumeMeta"],
     },
+    orchestrator: {
+      listRoles: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["orchestrator"]["listRoles"],
+      promote: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["orchestrator"]["promote"],
+      demote: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["orchestrator"]["demote"],
+      listWorkers: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["orchestrator"]["listWorkers"],
+    },
     git: {} as EnvironmentApi["git"],
     orchestration: {
       dispatchCommand: input.dispatchCommand,

@@ -92,6 +92,7 @@ import {
 import { ProjectFaviconResolverLive } from "./project/Layers/ProjectFaviconResolver.ts";
 import { ExternalSessionDirectoryLive } from "./provider/Layers/ExternalSessionDirectory.ts";
 import { ProviderSessionDirectory } from "./provider/Services/ProviderSessionDirectory.ts";
+import { OrchestratorService } from "./orchestrator/OrchestratorService.ts";
 import {
   ProjectSetupScriptRunner,
   type ProjectSetupScriptRunnerShape,
@@ -553,6 +554,15 @@ const buildAppUnderTest = (options?: {
           getBinding: () => Effect.succeed(Option.none()),
           listThreadIds: () => Effect.succeed([]),
           listBindings: () => Effect.succeed([]),
+        }),
+      ),
+      Layer.provide(
+        Layer.mock(OrchestratorService)({
+          listRoles: () => Effect.succeed([]),
+          listWorkers: () => Effect.succeed([]),
+          promote: (threadId) => Effect.succeed({ threadId, isMaster: true }),
+          demote: (threadId) => Effect.succeed({ threadId, isMaster: false }),
+          isMaster: () => Effect.succeed(false),
         }),
       ),
       Layer.provideMerge(FetchHttpClient.layer),

@@ -30,6 +30,16 @@ import type {
   ExternalSessionsGetResumeMetaResult,
 } from "./externalSession.ts";
 import type {
+  OrchestratorListRolesInput,
+  OrchestratorListRolesResult,
+  OrchestratorListWorkersInput,
+  OrchestratorListWorkersResult,
+  OrchestratorPromoteInput,
+  OrchestratorPromoteResult,
+  OrchestratorDemoteInput,
+  OrchestratorDemoteResult,
+} from "./orchestrator.ts";
+import type {
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
   ProjectWriteFileInput,
@@ -277,6 +287,14 @@ export interface EnvironmentApi {
     getResumeMeta: (
       input: ExternalSessionsGetResumeMetaInput,
     ) => Promise<ExternalSessionsGetResumeMetaResult>;
+  };
+  orchestrator: {
+    listRoles: (input: OrchestratorListRolesInput) => Promise<OrchestratorListRolesResult>;
+    promote: (input: OrchestratorPromoteInput) => Promise<OrchestratorPromoteResult>;
+    demote: (input: OrchestratorDemoteInput) => Promise<OrchestratorDemoteResult>;
+    listWorkers: (
+      input: OrchestratorListWorkersInput,
+    ) => Promise<OrchestratorListWorkersResult>;
   };
   git: {
     listBranches: (input: GitListBranchesInput) => Promise<GitListBranchesResult>;

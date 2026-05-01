@@ -24,6 +24,19 @@ import {
   ExternalSessionsGetResumeMetaError,
 } from "./externalSession.ts";
 import {
+  OrchestratorDemoteInput,
+  OrchestratorDemoteResult,
+  OrchestratorListRolesInput,
+  OrchestratorListRolesResult,
+  OrchestratorListRolesError,
+  OrchestratorListWorkersInput,
+  OrchestratorListWorkersResult,
+  OrchestratorListWorkersError,
+  OrchestratorPromoteInput,
+  OrchestratorPromoteResult,
+  OrchestratorPromotionError,
+} from "./orchestrator.ts";
+import {
   GitActionProgressEvent,
   GitCheckoutInput,
   GitCheckoutResult,
@@ -111,6 +124,12 @@ export const WS_METHODS = {
   externalSessionsBindResume: "externalSessions.bindResume",
   externalSessionsGetMessages: "externalSessions.getMessages",
   externalSessionsGetResumeMeta: "externalSessions.getResumeMeta",
+
+  // Orchestrator (master/worker) methods
+  orchestratorListRoles: "orchestrator.listRoles",
+  orchestratorPromote: "orchestrator.promote",
+  orchestratorDemote: "orchestrator.demote",
+  orchestratorListWorkers: "orchestrator.listWorkers",
 
   // Git methods
   gitPull: "git.pull",
@@ -234,6 +253,30 @@ export const WsExternalSessionsGetResumeMetaRpc = Rpc.make(
     error: ExternalSessionsGetResumeMetaError,
   },
 );
+
+export const WsOrchestratorListRolesRpc = Rpc.make(WS_METHODS.orchestratorListRoles, {
+  payload: OrchestratorListRolesInput,
+  success: OrchestratorListRolesResult,
+  error: OrchestratorListRolesError,
+});
+
+export const WsOrchestratorPromoteRpc = Rpc.make(WS_METHODS.orchestratorPromote, {
+  payload: OrchestratorPromoteInput,
+  success: OrchestratorPromoteResult,
+  error: OrchestratorPromotionError,
+});
+
+export const WsOrchestratorDemoteRpc = Rpc.make(WS_METHODS.orchestratorDemote, {
+  payload: OrchestratorDemoteInput,
+  success: OrchestratorDemoteResult,
+  error: OrchestratorPromotionError,
+});
+
+export const WsOrchestratorListWorkersRpc = Rpc.make(WS_METHODS.orchestratorListWorkers, {
+  payload: OrchestratorListWorkersInput,
+  success: OrchestratorListWorkersResult,
+  error: OrchestratorListWorkersError,
+});
 
 export const WsSubscribeGitStatusRpc = Rpc.make(WS_METHODS.subscribeGitStatus, {
   payload: GitStatusInput,
@@ -425,6 +468,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsExternalSessionsBindResumeRpc,
   WsExternalSessionsGetMessagesRpc,
   WsExternalSessionsGetResumeMetaRpc,
+  WsOrchestratorListRolesRpc,
+  WsOrchestratorPromoteRpc,
+  WsOrchestratorDemoteRpc,
+  WsOrchestratorListWorkersRpc,
   WsSubscribeGitStatusRpc,
   WsGitPullRpc,
   WsGitRefreshStatusRpc,

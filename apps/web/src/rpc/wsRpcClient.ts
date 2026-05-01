@@ -77,6 +77,12 @@ export interface WsRpcClient {
     readonly getMessages: RpcUnaryMethod<typeof WS_METHODS.externalSessionsGetMessages>;
     readonly getResumeMeta: RpcUnaryMethod<typeof WS_METHODS.externalSessionsGetResumeMeta>;
   };
+  readonly orchestrator: {
+    readonly listRoles: RpcUnaryMethod<typeof WS_METHODS.orchestratorListRoles>;
+    readonly promote: RpcUnaryMethod<typeof WS_METHODS.orchestratorPromote>;
+    readonly demote: RpcUnaryMethod<typeof WS_METHODS.orchestratorDemote>;
+    readonly listWorkers: RpcUnaryMethod<typeof WS_METHODS.orchestratorListWorkers>;
+  };
   readonly shell: {
     readonly openInEditor: (input: {
       readonly cwd: Parameters<LocalApi["shell"]["openInEditor"]>[0];
@@ -172,6 +178,16 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
         transport.request((client) => client[WS_METHODS.externalSessionsGetMessages](input)),
       getResumeMeta: (input) =>
         transport.request((client) => client[WS_METHODS.externalSessionsGetResumeMeta](input)),
+    },
+    orchestrator: {
+      listRoles: (input) =>
+        transport.request((client) => client[WS_METHODS.orchestratorListRoles](input)),
+      promote: (input) =>
+        transport.request((client) => client[WS_METHODS.orchestratorPromote](input)),
+      demote: (input) =>
+        transport.request((client) => client[WS_METHODS.orchestratorDemote](input)),
+      listWorkers: (input) =>
+        transport.request((client) => client[WS_METHODS.orchestratorListWorkers](input)),
     },
     shell: {
       openInEditor: (input) =>

@@ -10,6 +10,9 @@ import {
   ExternalSessionsBindResumeError,
   ExternalSessionsGetMessagesError,
   ExternalSessionsGetResumeMetaError,
+  OrchestratorListRolesError,
+  OrchestratorListWorkersError,
+  OrchestratorPromotionError,
   type OrchestrationCommand,
   type GitActionProgressEvent,
   type GitManagerServiceError,
@@ -49,6 +52,7 @@ import {
   observeRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
 import { ExternalSessionDirectory } from "./provider/Services/ExternalSessionDirectory.ts";
+import { OrchestratorService } from "./orchestrator/OrchestratorService.ts";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
 import { ProviderSessionDirectory } from "./provider/Services/ProviderSessionDirectory.ts";
 import { ServerLifecycleEvents } from "./serverLifecycleEvents.ts";
@@ -151,6 +155,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
       const providerRegistry = yield* ProviderRegistry;
       const externalSessionDirectory = yield* ExternalSessionDirectory;
       const providerSessionDirectory = yield* ProviderSessionDirectory;
+      const orchestratorService = yield* OrchestratorService;
       const config = yield* ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents;
       const serverSettings = yield* ServerSettingsService;
@@ -907,6 +912,70 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               ),
             ),
             { "rpc.aggregate": "externalSessions" },
+          ),
+        [WS_METHODS.orchestratorListRoles]: (_input) =>
+          observeRpcEffect(
+            WS_METHODS.orchestratorListRoles,
+            Effect.gen(function* () {
+              const roles = yield* orchestratorService.listRoles();
+              return { roles };
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestratorListRolesError({
+                    message: "Failed to list orchestrator roles.",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestrator" },
+          ),
+        [WS_METHODS.orchestratorPromote]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.orchestratorPromote,
+            orchestratorService.promote(input.threadId).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestratorPromotionError({
+                    message: "Failed to promote thread to orchestrator.",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestrator" },
+          ),
+        [WS_METHODS.orchestratorDemote]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.orchestratorDemote,
+            orchestratorService.demote(input.threadId).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestratorPromotionError({
+                    message: "Failed to demote orchestrator thread.",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestrator" },
+          ),
+        [WS_METHODS.orchestratorListWorkers]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.orchestratorListWorkers,
+            Effect.gen(function* () {
+              const workers = yield* orchestratorService.listWorkers({
+                ...(input.masterThreadId ? { masterThreadId: input.masterThreadId } : {}),
+              });
+              return { workers };
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestratorListWorkersError({
+                    message: "Failed to list workers.",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestrator" },
           ),
         [WS_METHODS.externalSessionsBindResume]: (input) =>
           observeRpcEffect(
