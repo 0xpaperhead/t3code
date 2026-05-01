@@ -26,6 +26,9 @@ import {
 import {
   OrchestratorDemoteInput,
   OrchestratorDemoteResult,
+  OrchestratorIsMasterInput,
+  OrchestratorIsMasterResult,
+  OrchestratorIsMasterError,
   OrchestratorListRolesInput,
   OrchestratorListRolesResult,
   OrchestratorListRolesError,
@@ -129,6 +132,7 @@ export const WS_METHODS = {
   orchestratorListRoles: "orchestrator.listRoles",
   orchestratorPromote: "orchestrator.promote",
   orchestratorDemote: "orchestrator.demote",
+  orchestratorIsMaster: "orchestrator.isMaster",
   orchestratorListWorkers: "orchestrator.listWorkers",
 
   // Git methods
@@ -270,6 +274,12 @@ export const WsOrchestratorDemoteRpc = Rpc.make(WS_METHODS.orchestratorDemote, {
   payload: OrchestratorDemoteInput,
   success: OrchestratorDemoteResult,
   error: OrchestratorPromotionError,
+});
+
+export const WsOrchestratorIsMasterRpc = Rpc.make(WS_METHODS.orchestratorIsMaster, {
+  payload: OrchestratorIsMasterInput,
+  success: OrchestratorIsMasterResult,
+  error: OrchestratorIsMasterError,
 });
 
 export const WsOrchestratorListWorkersRpc = Rpc.make(WS_METHODS.orchestratorListWorkers, {
@@ -471,6 +481,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestratorListRolesRpc,
   WsOrchestratorPromoteRpc,
   WsOrchestratorDemoteRpc,
+  WsOrchestratorIsMasterRpc,
   WsOrchestratorListWorkersRpc,
   WsSubscribeGitStatusRpc,
   WsGitPullRpc,

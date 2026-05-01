@@ -30,6 +30,8 @@ import type {
   ExternalSessionsGetResumeMetaResult,
 } from "./externalSession.ts";
 import type {
+  OrchestratorIsMasterInput,
+  OrchestratorIsMasterResult,
   OrchestratorListRolesInput,
   OrchestratorListRolesResult,
   OrchestratorListWorkersInput,
@@ -292,6 +294,7 @@ export interface EnvironmentApi {
     listRoles: (input: OrchestratorListRolesInput) => Promise<OrchestratorListRolesResult>;
     promote: (input: OrchestratorPromoteInput) => Promise<OrchestratorPromoteResult>;
     demote: (input: OrchestratorDemoteInput) => Promise<OrchestratorDemoteResult>;
+    isMaster: (input: OrchestratorIsMasterInput) => Promise<OrchestratorIsMasterResult>;
     listWorkers: (
       input: OrchestratorListWorkersInput,
     ) => Promise<OrchestratorListWorkersResult>;

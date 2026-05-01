@@ -92,6 +92,7 @@ import {
   type LucideIcon,
   LockIcon,
   LockOpenIcon,
+  NetworkIcon,
   PenLineIcon,
   XIcon,
 } from "lucide-react";
@@ -104,6 +105,7 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
+import { useThreadIsMaster } from "../../hooks/useThreadIsMaster";
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
 import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
@@ -177,6 +179,10 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
   onToggleInteractionMode: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
   onTogglePlanSidebar: () => void;
+  showOrchestratorToggle: boolean;
+  orchestratorIsMaster: boolean;
+  orchestratorIsLoading: boolean;
+  onToggleOrchestrator: () => void;
 }) {
   const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
   const RuntimeModeIcon = runtimeModeOption.icon;
@@ -266,6 +272,36 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
           >
             <ListTodoIcon />
             <span className="sr-only sm:not-sr-only">{props.planSidebarLabel}</span>
+          </Button>
+        </>
+      ) : null}
+
+      {props.showOrchestratorToggle ? (
+        <>
+          <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+          <Button
+            variant="ghost"
+            className={cn(
+              "shrink-0 whitespace-nowrap px-2 sm:px-3",
+              props.orchestratorIsMaster
+                ? "text-purple-400 hover:text-purple-300"
+                : "text-muted-foreground/70 hover:text-foreground/80",
+            )}
+            size="sm"
+            type="button"
+            disabled={props.orchestratorIsLoading}
+            onClick={props.onToggleOrchestrator}
+            title={
+              props.orchestratorIsMaster
+                ? "Orchestrator on — this thread can spawn worker Claude instances. Click to turn off."
+                : "Promote to orchestrator — gives this thread spawn_worker / list_workers / list_roles / read_worker_output tools."
+            }
+            aria-pressed={props.orchestratorIsMaster}
+          >
+            <NetworkIcon />
+            <span className="sr-only sm:not-sr-only">
+              {props.orchestratorIsMaster ? "Orchestrator" : "Solo"}
+            </span>
           </Button>
         </>
       ) : null}
@@ -592,6 +628,15 @@ export const ChatComposer = memo(
         explicitSelectedInstanceId,
       ) ?? ProviderDriverKind.make("codex");
     const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
+
+    // Master/worker orchestrator state for the toolbar toggle. Only Claude
+    // threads can be promoted; the toggle hides itself for other providers.
+    const showOrchestratorToggle = selectedProvider === "claudeAgent";
+    const {
+      isMaster: orchestratorIsMaster,
+      isLoading: orchestratorIsLoading,
+      toggle: toggleOrchestrator,
+    } = useThreadIsMaster(environmentId, activeThreadId);
     const lockedContinuationGroupKey = useMemo((): string | null => {
       if (!lockedProvider || !activeThread) return null;
       const lockedInstanceId =
@@ -2056,6 +2101,12 @@ export const ChatComposer = memo(
                         onToggleInteractionMode={toggleInteractionMode}
                         onRuntimeModeChange={handleRuntimeModeChange}
                         onTogglePlanSidebar={togglePlanSidebar}
+                        showOrchestratorToggle={showOrchestratorToggle}
+                        orchestratorIsMaster={orchestratorIsMaster}
+                        orchestratorIsLoading={orchestratorIsLoading}
+                        onToggleOrchestrator={() => {
+                          void toggleOrchestrator();
+                        }}
                       />
                     </>
                   )}

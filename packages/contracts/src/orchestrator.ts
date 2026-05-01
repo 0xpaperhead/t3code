@@ -60,6 +60,25 @@ export class OrchestratorPromotionError extends Schema.TaggedErrorClass<Orchestr
   },
 ) {}
 
+export const OrchestratorIsMasterInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type OrchestratorIsMasterInput = typeof OrchestratorIsMasterInput.Type;
+
+export const OrchestratorIsMasterResult = Schema.Struct({
+  threadId: ThreadId,
+  isMaster: Schema.Boolean,
+});
+export type OrchestratorIsMasterResult = typeof OrchestratorIsMasterResult.Type;
+
+export class OrchestratorIsMasterError extends Schema.TaggedErrorClass<OrchestratorIsMasterError>()(
+  "OrchestratorIsMasterError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {}
+
 export const OrchestratorWorkerSummary = Schema.Struct({
   threadId: ThreadId,
   masterThreadId: ThreadId,

@@ -81,6 +81,7 @@ export interface WsRpcClient {
     readonly listRoles: RpcUnaryMethod<typeof WS_METHODS.orchestratorListRoles>;
     readonly promote: RpcUnaryMethod<typeof WS_METHODS.orchestratorPromote>;
     readonly demote: RpcUnaryMethod<typeof WS_METHODS.orchestratorDemote>;
+    readonly isMaster: RpcUnaryMethod<typeof WS_METHODS.orchestratorIsMaster>;
     readonly listWorkers: RpcUnaryMethod<typeof WS_METHODS.orchestratorListWorkers>;
   };
   readonly shell: {
@@ -186,6 +187,8 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
         transport.request((client) => client[WS_METHODS.orchestratorPromote](input)),
       demote: (input) =>
         transport.request((client) => client[WS_METHODS.orchestratorDemote](input)),
+      isMaster: (input) =>
+        transport.request((client) => client[WS_METHODS.orchestratorIsMaster](input)),
       listWorkers: (input) =>
         transport.request((client) => client[WS_METHODS.orchestratorListWorkers](input)),
     },

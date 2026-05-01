@@ -33,6 +33,7 @@ export function createEnvironmentApi(rpcClient: WsRpcClient): EnvironmentApi {
       listRoles: rpcClient.orchestrator.listRoles,
       promote: rpcClient.orchestrator.promote,
       demote: rpcClient.orchestrator.demote,
+      isMaster: rpcClient.orchestrator.isMaster,
       listWorkers: rpcClient.orchestrator.listWorkers,
     },
     git: {

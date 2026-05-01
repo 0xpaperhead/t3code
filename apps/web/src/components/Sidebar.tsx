@@ -1959,43 +1959,10 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
-          { id: "promote-orchestrator", label: "Promote to orchestrator" },
           { id: "delete", label: "Delete", destructive: true },
         ],
         position,
       );
-
-      if (clicked === "promote-orchestrator") {
-        const envApi = readEnvironmentApi(thread.environmentId);
-        if (!envApi) {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Cannot promote",
-              description: "Environment is not connected.",
-            }),
-          );
-          return;
-        }
-        try {
-          await envApi.orchestrator.promote({ threadId: thread.id });
-          toastManager.add({
-            type: "success",
-            title: "Thread promoted to orchestrator",
-            description:
-              "It now has access to spawn_worker, list_roles, list_workers and read_worker_output. Send a message to use them.",
-          });
-        } catch (error) {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Failed to promote",
-              description: error instanceof Error ? error.message : "An error occurred.",
-            }),
-          );
-        }
-        return;
-      }
 
       if (clicked === "rename") {
         setRenamingThreadKey(threadKey);

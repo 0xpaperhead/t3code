@@ -230,6 +230,9 @@ function createMockEnvironmentApi(input: {
       demote: (() => {
         throw new Error("Not implemented in browser test.");
       }) as EnvironmentApi["orchestrator"]["demote"],
+      isMaster: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["orchestrator"]["isMaster"],
       listWorkers: (() => {
         throw new Error("Not implemented in browser test.");
       }) as EnvironmentApi["orchestrator"]["listWorkers"],

@@ -10,6 +10,7 @@ import {
   ExternalSessionsBindResumeError,
   ExternalSessionsGetMessagesError,
   ExternalSessionsGetResumeMetaError,
+  OrchestratorIsMasterError,
   OrchestratorListRolesError,
   OrchestratorListWorkersError,
   OrchestratorPromotionError,
@@ -954,6 +955,23 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                 (cause) =>
                   new OrchestratorPromotionError({
                     message: "Failed to demote orchestrator thread.",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestrator" },
+          ),
+        [WS_METHODS.orchestratorIsMaster]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.orchestratorIsMaster,
+            Effect.gen(function* () {
+              const isMaster = yield* orchestratorService.isMaster(input.threadId);
+              return { threadId: input.threadId, isMaster };
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestratorIsMasterError({
+                    message: "Failed to read orchestrator master status.",
                     cause,
                   }),
               ),
