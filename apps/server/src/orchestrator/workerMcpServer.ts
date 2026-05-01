@@ -24,7 +24,9 @@ import {
   MessageId,
   type OrchestratorRole,
   type OrchestratorWorkerSummary,
+  ProviderDriverKind,
   ThreadId,
+  defaultInstanceIdForDriver,
 } from "@t3tools/contracts";
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { Effect, Option } from "effect";
@@ -202,11 +204,15 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
           const workerThreadId = ThreadId.make(crypto.randomUUID());
           const spawnedAt = new Date().toISOString();
 
+          const claudeDriverKind = ProviderDriverKind.make("claudeAgent");
+          const claudeInstanceId = defaultInstanceIdForDriver(claudeDriverKind);
+          const claudeDefaultModel = DEFAULT_MODEL_BY_PROVIDER[claudeDriverKind] ?? "claude-sonnet-4-6";
+
           // Pre-seed the worker binding with role config + workerOf marker BEFORE
           // dispatching thread.create, so the adapter can read them on the first turn.
           yield* providerSessionDirectory.upsert({
             threadId: workerThreadId,
-            provider: "claudeAgent",
+            provider: claudeDriverKind,
             adapterKey: "claudeAgent",
             status: "stopped",
             runtimeMode: "full-access",
@@ -234,8 +240,8 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
             projectId,
             title: titleSeed,
             modelSelection: {
-              provider: "claudeAgent",
-              model: DEFAULT_MODEL_BY_PROVIDER.claudeAgent,
+              instanceId: claudeInstanceId,
+              model: claudeDefaultModel,
             },
             runtimeMode: DEFAULT_RUNTIME_MODE,
             interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -256,8 +262,8 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
               attachments: [],
             },
             modelSelection: {
-              provider: "claudeAgent",
-              model: DEFAULT_MODEL_BY_PROVIDER.claudeAgent,
+              instanceId: claudeInstanceId,
+              model: claudeDefaultModel,
             },
             runtimeMode: DEFAULT_RUNTIME_MODE,
             interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,

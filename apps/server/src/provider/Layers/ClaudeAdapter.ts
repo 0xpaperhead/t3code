@@ -68,11 +68,7 @@ import {
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
-import { OrchestratorService } from "../../orchestrator/OrchestratorService.ts";
 import { createOrchestratorMcpServer } from "../../orchestrator/workerMcpServer.ts";
-import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
-import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import {
@@ -190,6 +186,19 @@ interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
   readonly close: () => void;
 }
 
+/**
+ * Bundle of services the ClaudeAdapter uses at session-start to detect a
+ * promoted "master" thread and attach an in-process MCP server. Passed in
+ * as constructor options instead of yielded so the ClaudeDriver contract
+ * stays narrow.
+ */
+export interface ClaudeAdapterOrchestratorServices {
+  readonly orchestratorService: import("../../orchestrator/OrchestratorService.ts").OrchestratorServiceShape;
+  readonly providerSessionDirectory: import("../Services/ProviderSessionDirectory.ts").ProviderSessionDirectoryShape;
+  readonly projectionSnapshotQuery: import("../../orchestration/Services/ProjectionSnapshotQuery.ts").ProjectionSnapshotQueryShape;
+  readonly orchestrationEngine: import("../../orchestration/Services/OrchestrationEngine.ts").OrchestrationEngineShape;
+}
+
 export interface ClaudeAdapterLiveOptions {
   readonly instanceId?: ProviderInstanceId;
   readonly environment?: NodeJS.ProcessEnv;
@@ -199,6 +208,7 @@ export interface ClaudeAdapterLiveOptions {
   }) => ClaudeQueryRuntime;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
+  readonly orchestrator?: ClaudeAdapterOrchestratorServices;
 }
 
 function isUuid(value: string): boolean {
@@ -989,10 +999,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, options?.environment).pipe(
     Effect.provideService(Path.Path, path),
   );
-  const orchestratorService = yield* OrchestratorService;
-  const providerSessionDirectoryRef = yield* ProviderSessionDirectory;
-  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
-  const orchestrationEngine = yield* OrchestrationEngineService;
+  const orchestratorServices = options?.orchestrator;
   const nativeEventLogger =
     options?.nativeEventLogger ??
     (options?.nativeEventLogPath !== undefined
@@ -2882,20 +2889,22 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
       // If this thread is promoted to orchestrator/master, build the in-process
       // MCP server that exposes spawn_worker / list_workers / list_roles /
-      // read_worker_output to the SDK.
-      const isMasterThread = threadId
-        ? yield* orchestratorService.isMaster(threadId).pipe(
-            Effect.orElseSucceed(() => false),
-          )
-        : false;
+      // read_worker_output to the SDK. Services are supplied via options so
+      // the driver contract stays narrow.
+      const isMasterThread =
+        orchestratorServices && threadId
+          ? yield* orchestratorServices.orchestratorService
+              .isMaster(threadId)
+              .pipe(Effect.orElseSucceed(() => false))
+          : false;
       const orchestratorMcpServer =
-        isMasterThread && threadId
+        isMasterThread && threadId && orchestratorServices
           ? createOrchestratorMcpServer({
               masterThreadId: threadId,
-              orchestratorService,
-              providerSessionDirectory: providerSessionDirectoryRef,
-              projectionSnapshotQuery,
-              orchestrationEngine,
+              orchestratorService: orchestratorServices.orchestratorService,
+              providerSessionDirectory: orchestratorServices.providerSessionDirectory,
+              projectionSnapshotQuery: orchestratorServices.projectionSnapshotQuery,
+              orchestrationEngine: orchestratorServices.orchestrationEngine,
             })
           : null;
 

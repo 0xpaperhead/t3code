@@ -42,6 +42,7 @@ import { CursorDriver } from "../Drivers/CursorDriver.ts";
 import { OpenCodeDriver } from "../Drivers/OpenCodeDriver.ts";
 import { OpenCodeRuntimeLive } from "../opencodeRuntime.ts";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "./ProviderEventLoggers.ts";
+import { NoOpClaudeOrchestratorBridgeLayer } from "../../orchestrator/ClaudeOrchestratorBridge.ts";
 import { makeProviderInstanceRegistry } from "./ProviderInstanceRegistryLive.ts";
 
 const makeCodexConfig = (overrides: Partial<CodexSettings>): CodexSettings => ({
@@ -90,6 +91,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
   }).pipe(
     Layer.provideMerge(NodeServices.layer),
     Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
+    Layer.provideMerge(NoOpClaudeOrchestratorBridgeLayer),
   );
 
   it.live("boots two independent codex instances from a ProviderInstanceConfigMap", () =>
@@ -226,6 +228,7 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
   }).pipe(
     Layer.provideMerge(infraLayer),
     Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
+    Layer.provideMerge(NoOpClaudeOrchestratorBridgeLayer),
   );
 
   it.live("boots one instance of every shipped driver from a single config map", () =>
@@ -271,7 +274,12 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       };
 
       const { registry } = yield* makeProviderInstanceRegistry({
-        drivers: [CodexDriver, ClaudeDriver, CursorDriver, OpenCodeDriver],
+        // ClaudeDriverEnv now includes ClaudeOrchestratorBridge (via the
+        // master/worker orchestrator); the AnyProviderDriver constraint
+        // widens to the union, so we cast through ClaudeDriver's wider env.
+        drivers: [CodexDriver, ClaudeDriver, CursorDriver, OpenCodeDriver] as ReadonlyArray<
+          typeof ClaudeDriver
+        >,
         configMap,
       });
 

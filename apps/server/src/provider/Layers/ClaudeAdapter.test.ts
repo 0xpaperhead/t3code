@@ -50,7 +50,7 @@ const orchestratorTestLayers = Layer.mergeAll(
   }),
   Layer.mock(ProviderSessionDirectory)({
     upsert: () => Effect.void,
-    getProvider: () => Effect.succeed("claudeAgent" as const),
+    getProvider: () => Effect.succeed(ProviderDriverKind.make("claudeAgent")),
     getBinding: () => Effect.succeed(Option.none()),
     listThreadIds: () => Effect.succeed([]),
     listBindings: () => Effect.succeed([]),

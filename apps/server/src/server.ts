@@ -20,6 +20,7 @@ import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionD
 import { ExternalSessionDirectoryLive } from "./provider/Layers/ExternalSessionDirectory.ts";
 import { OrchestratorRolesLive } from "./orchestrator/roles.ts";
 import { OrchestratorServiceLive } from "./orchestrator/OrchestratorService.ts";
+import { ClaudeOrchestratorBridgeLive } from "./orchestrator/ClaudeOrchestratorBridge.ts";
 import { ProviderSessionRuntimeRepositoryLive } from "./persistence/Layers/ProviderSessionRuntime.ts";
 import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRegistry.ts";
 import { ProviderEventLoggersLive } from "./provider/Layers/ProviderEventLoggers.ts";
@@ -145,6 +146,32 @@ const ProviderSessionDirectoryLayerLive = ProviderSessionDirectoryLive.pipe(
   Layer.provide(ProviderSessionRuntimeRepositoryLive),
 );
 
+// Consolidates project-favicon + external-session + orchestrator services
+// (including the ClaudeOrchestratorBridge that ClaudeAdapter depends on)
+// into a single layer so the top-level RuntimeDependenciesLive pipe stays
+// under TypeScript's 20-arg overload limit.
+const OrchestratorServiceLayerLive = OrchestratorServiceLive.pipe(
+  Layer.provide(OrchestratorRolesLive),
+  Layer.provide(ProviderSessionDirectoryLayerLive),
+);
+
+const ProjectAuxiliaryServicesLive = Layer.mergeAll(
+  ProjectFaviconResolverLive,
+  ExternalSessionDirectoryLive,
+  OrchestratorRolesLive,
+  OrchestratorServiceLayerLive,
+  // Bundle the four services ClaudeAdapter needs at session-start into a
+  // single tag the driver yields. Avoids widening ClaudeDriverEnv to four
+  // separate dependencies and keeps the driver contract narrow. Needs
+  // orchestration services + provider session directory + orchestrator service
+  // composed in.
+  ClaudeOrchestratorBridgeLive.pipe(
+    Layer.provide(OrchestratorServiceLayerLive),
+    Layer.provide(ProviderSessionDirectoryLayerLive),
+    Layer.provide(OrchestrationLayerLive),
+  ),
+);
+
 // `ProviderAdapterRegistryLive` is now a facade that resolves kind → adapter
 // by looking up the default `ProviderInstance` per driver in the instance
 // registry. Adapter construction itself moved inside each driver's
@@ -228,15 +255,7 @@ const RuntimeDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(OpenCodeRuntimeLive),
   Layer.provideMerge(ServerSettingsLive),
   Layer.provideMerge(WorkspaceLayerLive),
-  Layer.provideMerge(ProjectFaviconResolverLive),
-  Layer.provideMerge(ExternalSessionDirectoryLive),
-  Layer.provideMerge(OrchestratorRolesLive),
-  Layer.provideMerge(
-    OrchestratorServiceLive.pipe(
-      Layer.provide(OrchestratorRolesLive),
-      Layer.provide(ProviderSessionDirectoryLayerLive),
-    ),
-  ),
+  Layer.provideMerge(ProjectAuxiliaryServicesLive),
   Layer.provideMerge(RepositoryIdentityResolverLive),
   Layer.provideMerge(ServerEnvironmentLive),
   Layer.provideMerge(AuthLayerLive),

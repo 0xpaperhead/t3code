@@ -18,6 +18,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 
 import { makeClaudeTextGeneration } from "../../git/Layers/ClaudeTextGeneration.ts";
 import { ServerConfig } from "../../config.ts";
+import { ClaudeOrchestratorBridge } from "../../orchestrator/ClaudeOrchestratorBridge.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeClaudeAdapter } from "../Layers/ClaudeAdapter.ts";
 import {
@@ -45,7 +46,8 @@ export type ClaudeDriverEnv =
   | FileSystem.FileSystem
   | Path.Path
   | ProviderEventLoggers
-  | ServerConfig;
+  | ServerConfig
+  | ClaudeOrchestratorBridge;
 
 const withInstanceIdentity =
   (input: {
@@ -90,9 +92,11 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         continuationGroupKey,
       });
 
+      const orchestratorBridge = yield* ClaudeOrchestratorBridge;
       const adapterOptions = {
         instanceId,
         environment: processEnv,
+        orchestrator: orchestratorBridge,
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
       };
       const adapter = yield* makeClaudeAdapter(effectiveConfig, adapterOptions);

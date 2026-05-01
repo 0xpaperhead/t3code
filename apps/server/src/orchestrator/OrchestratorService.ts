@@ -2,6 +2,7 @@ import {
   type OrchestratorRole,
   type OrchestratorWorkerSummary,
   ProjectId,
+  ProviderDriverKind,
   ThreadId,
 } from "@t3tools/contracts";
 import { Context, Data, Effect, Layer } from "effect";
@@ -107,7 +108,7 @@ const makeOrchestratorService = Effect.gen(function* () {
       if (existingOpt._tag === "None") {
         yield* directory.upsert({
           threadId,
-          provider: "claudeAgent",
+          provider: ProviderDriverKind.make("claudeAgent"),
           adapterKey: "claudeAgent",
           status: "stopped",
           runtimePayload: { orchestrator: { isMaster: true } },

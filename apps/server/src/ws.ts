@@ -13,6 +13,8 @@ import {
   OrchestratorListRolesError,
   OrchestratorListWorkersError,
   OrchestratorPromotionError,
+  ProviderDriverKind,
+  defaultInstanceIdForDriver,
   type OrchestrationCommand,
   type GitActionProgressEvent,
   type GitManagerServiceError,
@@ -982,7 +984,10 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             WS_METHODS.externalSessionsBindResume,
             Effect.gen(function* () {
               // Map our public provider literal onto t3code's internal ProviderKind.
-              const providerKind = input.provider === "claude" ? "claudeAgent" : "codex";
+              const providerKind = ProviderDriverKind.make(
+                input.provider === "claude" ? "claudeAgent" : "codex",
+              );
+              const providerInstanceId = defaultInstanceIdForDriver(providerKind);
               // Build the resumeCursor shape each adapter expects.
               // Claude reads `resume` (the SDK session id). Codex reads `threadId` (its session id).
               const resumeCursor =
@@ -1024,8 +1029,8 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                 projectId: input.projectId,
                 title,
                 modelSelection: {
-                  provider: providerKind,
-                  model: DEFAULT_MODEL_BY_PROVIDER[providerKind],
+                  instanceId: providerInstanceId,
+                  model: DEFAULT_MODEL_BY_PROVIDER[providerKind] ?? "claude-sonnet-4-6",
                 },
                 runtimeMode: DEFAULT_RUNTIME_MODE,
                 interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
