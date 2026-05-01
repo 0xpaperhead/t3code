@@ -210,9 +210,12 @@ export function createOrchestratorMcpServer(deps: OrchestratorMcpServerDependenc
 
           // Pre-seed the worker binding with role config + workerOf marker BEFORE
           // dispatching thread.create, so the adapter can read them on the first turn.
+          // providerInstanceId is required by upsert validation post multi-provider
+          // refactor — routes the runtime to the configured Claude instance.
           yield* providerSessionDirectory.upsert({
             threadId: workerThreadId,
             provider: claudeDriverKind,
+            providerInstanceId: claudeInstanceId,
             adapterKey: "claudeAgent",
             status: "stopped",
             runtimeMode: "full-access",

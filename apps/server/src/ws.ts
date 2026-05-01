@@ -1024,6 +1024,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               yield* providerSessionDirectory.upsert({
                 threadId: newThreadId,
                 provider: providerKind,
+                providerInstanceId,
                 adapterKey: providerKind,
                 runtimeMode: "full-access",
                 status: "stopped",

@@ -31,6 +31,7 @@ import {
   ProjectId,
   ProviderDriverKind,
   ThreadId,
+  defaultInstanceIdForDriver,
 } from "@t3tools/contracts";
 import { Context, Data, Effect, Layer } from "effect";
 
@@ -133,9 +134,13 @@ const makeOrchestratorService = Effect.gen(function* () {
     Effect.gen(function* () {
       const existingOpt = yield* directory.getBinding(threadId);
       if (existingOpt._tag === "None") {
+        // Fresh binding: must include providerInstanceId so the runtime can
+        // route to a configured Claude instance.
+        const driverKind = ProviderDriverKind.make("claudeAgent");
         yield* directory.upsert({
           threadId,
-          provider: ProviderDriverKind.make("claudeAgent"),
+          provider: driverKind,
+          providerInstanceId: defaultInstanceIdForDriver(driverKind),
           adapterKey: "claudeAgent",
           status: "stopped",
           runtimePayload: { orchestrator: { isMaster: true } },
@@ -147,6 +152,9 @@ const makeOrchestratorService = Effect.gen(function* () {
       yield* directory.upsert({
         threadId,
         provider: existing.provider,
+        ...(existing.providerInstanceId
+          ? { providerInstanceId: existing.providerInstanceId }
+          : { providerInstanceId: defaultInstanceIdForDriver(existing.provider) }),
         ...(existing.adapterKey ? { adapterKey: existing.adapterKey } : {}),
         ...(existing.status ? { status: existing.status } : {}),
         runtimePayload: { ...payload, orchestrator: { isMaster: true } },
@@ -164,6 +172,9 @@ const makeOrchestratorService = Effect.gen(function* () {
       yield* directory.upsert({
         threadId,
         provider: existing.provider,
+        ...(existing.providerInstanceId
+          ? { providerInstanceId: existing.providerInstanceId }
+          : { providerInstanceId: defaultInstanceIdForDriver(existing.provider) }),
         ...(existing.adapterKey ? { adapterKey: existing.adapterKey } : {}),
         ...(existing.status ? { status: existing.status } : {}),
         runtimePayload: rest,
