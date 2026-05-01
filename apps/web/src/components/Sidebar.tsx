@@ -132,6 +132,7 @@ import {
   MenuTrigger,
 } from "./ui/menu";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
+import { useWorkerMap } from "../hooks/useWorkerMap";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ExternalSessionHistory } from "./ExternalSessionHistory";
@@ -345,6 +346,11 @@ interface SidebarThreadRowProps {
   cancelRename: () => void;
   attemptArchiveThread: (threadRef: ScopedThreadRef) => Promise<void>;
   openPrLink: (event: React.MouseEvent<HTMLElement>, prUrl: string) => void;
+  /**
+   * If true, render the row indented to indicate it's a worker thread under
+   * its master.
+   */
+  isNestedWorker?: boolean;
 }
 
 const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowProps) {
@@ -581,8 +587,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
 
   return (
     <SidebarMenuSubItem
-      className="w-full"
+      className={`w-full ${props.isNestedWorker ? "pl-3" : ""}`}
       data-thread-item
+      data-nested-worker={props.isNestedWorker ? "true" : undefined}
       onMouseLeave={handleMouseLeave}
       onBlurCapture={handleBlurCapture}
     >
@@ -766,6 +773,11 @@ interface SidebarProjectThreadListProps {
   hiddenThreadStatus: ThreadStatusPill | null;
   orderedProjectThreadKeys: readonly string[];
   renderedThreads: readonly SidebarThreadSummary[];
+  /**
+   * Map of worker-thread-id → master-thread-id, used to nest workers under
+   * their master in the sidebar instead of rendering them as flat siblings.
+   */
+  workerOfMap: ReadonlyMap<ThreadId, ThreadId>;
   showEmptyThreadState: boolean;
   shouldShowThreadPanel: boolean;
   isThreadListExpanded: boolean;
@@ -816,6 +828,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
     hiddenThreadStatus,
     orderedProjectThreadKeys,
     renderedThreads,
+    workerOfMap,
     showEmptyThreadState,
     shouldShowThreadPanel,
     isThreadListExpanded,
@@ -863,37 +876,71 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
         </SidebarMenuSubItem>
       ) : null}
       {shouldShowThreadPanel &&
-        renderedThreads.map((thread) => {
-          const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-          return (
-            <SidebarThreadRow
-              key={threadKey}
-              thread={thread}
-              projectCwd={projectCwd}
-              orderedProjectThreadKeys={orderedProjectThreadKeys}
-              isActive={activeRouteThreadKey === threadKey}
-              jumpLabel={threadJumpLabelByKey.get(threadKey) ?? null}
-              appSettingsConfirmThreadArchive={appSettingsConfirmThreadArchive}
-              renamingThreadKey={renamingThreadKey}
-              renamingTitle={renamingTitle}
-              setRenamingTitle={setRenamingTitle}
-              renamingInputRef={renamingInputRef}
-              renamingCommittedRef={renamingCommittedRef}
-              confirmingArchiveThreadKey={confirmingArchiveThreadKey}
-              setConfirmingArchiveThreadKey={setConfirmingArchiveThreadKey}
-              confirmArchiveButtonRefs={confirmArchiveButtonRefs}
-              handleThreadClick={handleThreadClick}
-              navigateToThread={navigateToThread}
-              handleMultiSelectContextMenu={handleMultiSelectContextMenu}
-              handleThreadContextMenu={handleThreadContextMenu}
-              clearSelection={clearSelection}
-              commitRename={commitRename}
-              cancelRename={cancelRename}
-              attemptArchiveThread={attemptArchiveThread}
-              openPrLink={openPrLink}
-            />
+        (() => {
+          // Index threads by id so we can find a master's workers below.
+          const threadsById = new Map<ThreadId, SidebarThreadSummary>(
+            renderedThreads.map((thread) => [thread.id, thread]),
           );
-        })}
+          // Group: workers nested under their master (when both are in the
+          // rendered set), masters retain their original order.
+          const childrenByMasterId = new Map<ThreadId, SidebarThreadSummary[]>();
+          const renderedIds = new Set<ThreadId>();
+          for (const thread of renderedThreads) {
+            const masterId = workerOfMap.get(thread.id);
+            if (masterId !== undefined && threadsById.has(masterId)) {
+              const list = childrenByMasterId.get(masterId) ?? [];
+              list.push(thread);
+              childrenByMasterId.set(masterId, list);
+              renderedIds.add(thread.id);
+            }
+          }
+
+          const renderRow = (thread: SidebarThreadSummary, isNestedWorker: boolean) => {
+            const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+            return (
+              <SidebarThreadRow
+                key={threadKey}
+                thread={thread}
+                projectCwd={projectCwd}
+                orderedProjectThreadKeys={orderedProjectThreadKeys}
+                isActive={activeRouteThreadKey === threadKey}
+                jumpLabel={threadJumpLabelByKey.get(threadKey) ?? null}
+                appSettingsConfirmThreadArchive={appSettingsConfirmThreadArchive}
+                renamingThreadKey={renamingThreadKey}
+                renamingTitle={renamingTitle}
+                setRenamingTitle={setRenamingTitle}
+                renamingInputRef={renamingInputRef}
+                renamingCommittedRef={renamingCommittedRef}
+                confirmingArchiveThreadKey={confirmingArchiveThreadKey}
+                setConfirmingArchiveThreadKey={setConfirmingArchiveThreadKey}
+                confirmArchiveButtonRefs={confirmArchiveButtonRefs}
+                handleThreadClick={handleThreadClick}
+                navigateToThread={navigateToThread}
+                handleMultiSelectContextMenu={handleMultiSelectContextMenu}
+                handleThreadContextMenu={handleThreadContextMenu}
+                clearSelection={clearSelection}
+                commitRename={commitRename}
+                cancelRename={cancelRename}
+                attemptArchiveThread={attemptArchiveThread}
+                openPrLink={openPrLink}
+                isNestedWorker={isNestedWorker}
+              />
+            );
+          };
+
+          const elements: React.ReactNode[] = [];
+          for (const thread of renderedThreads) {
+            if (renderedIds.has(thread.id)) continue;
+            elements.push(renderRow(thread, false));
+            const workers = childrenByMasterId.get(thread.id);
+            if (workers) {
+              for (const worker of workers) {
+                elements.push(renderRow(worker, true));
+              }
+            }
+          }
+          return elements;
+        })()}
 
       {projectExpanded && hasOverflowingThreads && !isThreadListExpanded && (
         <SidebarMenuSubItem className="w-full">
@@ -976,6 +1023,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   const appSettingsConfirmThreadDelete = useSettings<boolean>(
     (settings) => settings.confirmThreadDelete,
   );
+  const workerOfMap = useWorkerMap(project.environmentId);
   const appSettingsConfirmThreadArchive = useSettings<boolean>(
     (settings) => settings.confirmThreadArchive,
   );
@@ -2127,6 +2175,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         hiddenThreadStatus={hiddenThreadStatus}
         orderedProjectThreadKeys={orderedProjectThreadKeys}
         renderedThreads={renderedThreads}
+        workerOfMap={workerOfMap}
         showEmptyThreadState={showEmptyThreadState}
         shouldShowThreadPanel={shouldShowThreadPanel}
         isThreadListExpanded={isThreadListExpanded}
