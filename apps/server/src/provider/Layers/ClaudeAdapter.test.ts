@@ -22,19 +22,57 @@ import {
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { assert, describe, it } from "@effect/vitest";
-import { Context, Effect, Fiber, Layer, Random, Schema, Stream } from "effect";
+import { Context, Effect, Fiber, Layer, Option, Random, Schema, Stream } from "effect";
 
 import { attachmentRelativePath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import { OrchestratorService } from "../../orchestrator/OrchestratorService.ts";
+import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderAdapterValidationError } from "../Errors.ts";
 import type { ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
+import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.ts";
 import { makeClaudeAdapter, type ClaudeAdapterLiveOptions } from "./ClaudeAdapter.ts";
 
 // Test-local service tag so the rest of the file can keep using `yield* ClaudeAdapter`.
 class ClaudeAdapter extends Context.Service<ClaudeAdapter, ClaudeAdapterShape>()(
   "test/ClaudeAdapter",
 ) {}
+
+const orchestratorTestLayers = Layer.mergeAll(
+  Layer.mock(OrchestratorService)({
+    isMaster: () => Effect.succeed(false),
+    listRoles: () => Effect.succeed([]),
+    listWorkers: () => Effect.succeed([]),
+    promote: (threadId) => Effect.succeed({ threadId, isMaster: true }),
+    demote: (threadId) => Effect.succeed({ threadId, isMaster: false }),
+  }),
+  Layer.mock(ProviderSessionDirectory)({
+    upsert: () => Effect.void,
+    getProvider: () => Effect.succeed("claudeAgent" as const),
+    getBinding: () => Effect.succeed(Option.none()),
+    listThreadIds: () => Effect.succeed([]),
+    listBindings: () => Effect.succeed([]),
+  }),
+  Layer.mock(ProjectionSnapshotQuery)({
+    getThreadShellById: () => Effect.succeed(Option.none()),
+    getThreadDetailById: () => Effect.succeed(Option.none()),
+    getSnapshot: () => Effect.succeed({} as never),
+    getShellSnapshot: () => Effect.succeed({} as never),
+    getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
+    getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
+    getProjectShellById: () => Effect.succeed(Option.none()),
+    getFirstActiveThreadIdByProjectId: () => Effect.succeed(Option.none()),
+    getThreadCheckpointContext: () => Effect.succeed(Option.none()),
+  }),
+  Layer.mock(OrchestrationEngineService)({
+    dispatch: () => Effect.succeed({ sequence: 0 }),
+    getReadModel: () => Effect.succeed({} as never),
+    readEvents: () => Stream.empty,
+    streamDomainEvents: Stream.empty,
+  }),
+);
 
 class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
   private readonly queue: Array<SDKMessage> = [];
@@ -189,6 +227,7 @@ function makeHarness(config?: {
         ),
       ),
       Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provide(orchestratorTestLayers),
       Layer.provideMerge(NodeServices.layer),
     ),
     query,
@@ -1348,6 +1387,7 @@ describe("ClaudeAdapterLive", () => {
     ).pipe(
       Layer.provideMerge(ServerConfig.layerTest("/tmp/claude-adapter-test", "/tmp")),
       Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provide(orchestratorTestLayers),
       Layer.provideMerge(NodeServices.layer),
     );
 
@@ -1439,6 +1479,7 @@ describe("ClaudeAdapterLive", () => {
     ).pipe(
       Layer.provideMerge(ServerConfig.layerTest("/tmp/claude-adapter-test", "/tmp")),
       Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provide(orchestratorTestLayers),
       Layer.provideMerge(NodeServices.layer),
     );
 

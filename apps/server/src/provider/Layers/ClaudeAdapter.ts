@@ -68,6 +68,12 @@ import {
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import { OrchestratorService } from "../../orchestrator/OrchestratorService.ts";
+import { createOrchestratorMcpServer } from "../../orchestrator/workerMcpServer.ts";
+import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import {
   getClaudeModelCapabilities,
@@ -983,6 +989,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, options?.environment).pipe(
     Effect.provideService(Path.Path, path),
   );
+  const orchestratorService = yield* OrchestratorService;
+  const providerSessionDirectoryRef = yield* ProviderSessionDirectory;
+  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
+  const orchestrationEngine = yield* OrchestrationEngineService;
   const nativeEventLogger =
     options?.nativeEventLogger ??
     (options?.nativeEventLogPath !== undefined
@@ -2869,6 +2879,26 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
         ...(fastMode ? { fastMode: true } : {}),
       };
+
+      // If this thread is promoted to orchestrator/master, build the in-process
+      // MCP server that exposes spawn_worker / list_workers / list_roles /
+      // read_worker_output to the SDK.
+      const isMasterThread = threadId
+        ? yield* orchestratorService.isMaster(threadId).pipe(
+            Effect.orElseSucceed(() => false),
+          )
+        : false;
+      const orchestratorMcpServer =
+        isMasterThread && threadId
+          ? createOrchestratorMcpServer({
+              masterThreadId: threadId,
+              orchestratorService,
+              providerSessionDirectory: providerSessionDirectoryRef,
+              projectionSnapshotQuery,
+              orchestrationEngine,
+            })
+          : null;
+
       const queryOptions: ClaudeQueryOptions = {
         ...(input.cwd ? { cwd: input.cwd } : {}),
         ...(apiModelId ? { model: apiModelId } : {}),
@@ -2893,6 +2923,9 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         env: claudeEnvironment,
         ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
         ...(Object.keys(extraArgs).length > 0 ? { extraArgs } : {}),
+        ...(orchestratorMcpServer
+          ? { mcpServers: { t3_orchestrator: orchestratorMcpServer } }
+          : {}),
       };
 
       yield* Effect.annotateCurrentSpan({
