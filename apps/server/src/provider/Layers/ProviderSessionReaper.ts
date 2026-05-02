@@ -1,3 +1,4 @@
+import { CommandId } from "@t3tools/contracts";
 import { Duration, Effect, Layer, Schedule } from "effect";
 
 import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
@@ -87,6 +88,53 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
 
         if (reaped) {
           reapedCount += 1;
+          // Reaping the SDK session leaves the projection's `latestTurn.state`
+          // potentially stuck at "running" if the runtime previously died
+          // without dispatching a turn-end event (silent crash, hung tool call,
+          // network drop, etc.). Force the projection into a terminal state by
+          // dispatching `thread.turn.interrupt` if it still thinks the turn is
+          // running. The decider tolerates redundant interrupts; if the turn
+          // already terminated cleanly the dispatch is a no-op-ish failure
+          // we swallow.
+          const refreshedReadModel = yield* orchestrationEngine.getReadModel().pipe(
+            Effect.catchCause(() => Effect.succeed(readModel)),
+          );
+          const refreshedThread = refreshedReadModel.threads.find(
+            (t) => t.id === binding.threadId,
+          );
+          const stuckTurn =
+            refreshedThread?.latestTurn?.state === "running" ||
+            refreshedThread?.latestTurn?.state === "interrupted"
+              ? refreshedThread.latestTurn
+              : null;
+          if (stuckTurn) {
+            yield* orchestrationEngine
+              .dispatch({
+                type: "thread.turn.interrupt",
+                commandId: CommandId.make(
+                  `reaper-interrupt:${binding.threadId}:${crypto.randomUUID()}`,
+                ),
+                threadId: binding.threadId,
+                turnId: stuckTurn.turnId,
+                createdAt: new Date().toISOString(),
+              })
+              .pipe(
+                Effect.tap(() =>
+                  Effect.logInfo("provider.session.reaper.cleared-stuck-turn", {
+                    threadId: binding.threadId,
+                    turnId: stuckTurn.turnId,
+                    previousState: stuckTurn.state,
+                  }),
+                ),
+                Effect.catchCause((cause) =>
+                  Effect.logDebug("provider.session.reaper.clear-stuck-turn-failed", {
+                    threadId: binding.threadId,
+                    turnId: stuckTurn.turnId,
+                    cause,
+                  }),
+                ),
+              );
+          }
         }
       }
 
