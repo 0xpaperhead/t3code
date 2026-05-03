@@ -598,7 +598,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
 
   return (
     <SidebarMenuSubItem
-      className={`w-full ${props.isNestedWorker ? "pl-3" : ""}`}
+      className={`w-full ${props.isNestedWorker ? "pl-6" : ""}`}
       data-thread-item
       data-nested-worker={props.isNestedWorker ? "true" : undefined}
       onMouseLeave={handleMouseLeave}
@@ -645,6 +645,23 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 }`}
               />
             </button>
+          ) : null}
+          {props.workerToggle ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    aria-label="Master / orchestrator thread"
+                    className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-sm bg-primary/15 px-1 text-[9px] font-semibold uppercase leading-none tracking-wide text-primary"
+                  >
+                    M
+                  </span>
+                }
+              />
+              <TooltipPopup side="top">
+                Master — can spawn workers via the orchestrator MCP.
+              </TooltipPopup>
+            </Tooltip>
           ) : null}
           {prStatus && (
             <Tooltip>
